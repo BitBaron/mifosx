@@ -20,30 +20,29 @@ import org.mifosplatform.portfolio.calendar.data.CalendarData;
 public class CenterData {
 
     private final Long id;
+    private final String name;
     private final String externalId;
+    private final Long officeId;
+    private final String officeName;
+    private final Long staffId;
+    private final String staffName;
+    private final String hierarchy;
 
     private final EnumOptionData status;
     @SuppressWarnings("unused")
     private final boolean active;
     private final LocalDate activationDate;
 
-    private final String name;
-
-    private final Long officeId;
-    private final String officeName;
-    private final Long staffId;
-    private final String staffName;
-    private final String hierarchy;
     private final GroupTimelineData timeline;
     // associations
     private final Collection<GroupGeneralData> groupMembers;
 
     // template
-    private final Collection<OfficeData> officeOptions;
-    private final Collection<StaffData> staffOptions;
     private final Collection<GroupGeneralData> groupMembersOptions;
     private final CalendarData collectionMeetingCalendar;
     private final Collection<CodeValueData> closureReasons;
+    private final Collection<OfficeData> officeOptions;
+    private final Collection<StaffData> staffOptions;
 
     public static CenterData template(final Long officeId, final LocalDate activationDate, final Collection<OfficeData> officeOptions,
             final Collection<StaffData> staffOptions, final Collection<GroupGeneralData> groupMembersOptions) {
@@ -63,13 +62,12 @@ public class CenterData {
 
     public static CenterData instance(final Long id, final String name, final String externalId, final EnumOptionData status,
             final LocalDate activationDate, final Long officeId, final String officeName, final Long staffId, final String staffName,
-            final String hierarchy, final GroupTimelineData timeline) {
+            final String hierarchy, final GroupTimelineData timeline, final CalendarData collectionMeetingCalendar) {
 
         final Collection<GroupGeneralData> groupMembers = null;
         final Collection<OfficeData> officeOptions = null;
         final Collection<StaffData> staffOptions = null;
         final Collection<GroupGeneralData> groupMembersOptions = null;
-        final CalendarData collectionMeetingCalendar = null;
         final Collection<CodeValueData> closureReasons = null;
 
         return new CenterData(id, name, externalId, status, activationDate, officeId, officeName, staffId, staffName, hierarchy,
@@ -155,5 +153,13 @@ public class CenterData {
 
     public String getHierarchy() {
         return this.hierarchy;
+    }
+
+    public CalendarData getCollectionMeetingCalendar() {
+        return collectionMeetingCalendar;
+    }
+
+    public String getStaffName() {
+        return this.staffName;
     }
 }

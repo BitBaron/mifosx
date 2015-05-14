@@ -19,6 +19,9 @@ import org.mifosplatform.infrastructure.core.api.JsonCommand;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResult;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.mifosplatform.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.mifosplatform.infrastructure.core.service.ThreadLocalContextUtil;
+import org.mifosplatform.infrastructure.hooks.event.HookEvent;
+import org.mifosplatform.infrastructure.hooks.event.HookEventSource;
 import org.mifosplatform.infrastructure.security.service.PlatformSecurityContext;
 import org.mifosplatform.useradministration.domain.AppUser;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,17 +35,20 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
     private PlatformSecurityContext context;
     private final ApplicationContext applicationContext;
     private final ToApiJsonSerializer<Map<String, Object>> toApiJsonSerializer;
+    private final ToApiJsonSerializer<CommandProcessingResult> toApiResultJsonSerializer;
     private CommandSourceRepository commandSourceRepository;
     private final ConfigurationDomainService configurationDomainService;
 
     @Autowired
     public SynchronousCommandProcessingService(final PlatformSecurityContext context, final ApplicationContext applicationContext,
-            final ToApiJsonSerializer<Map<String, Object>> toApiJsonSerializer, final CommandSourceRepository commandSourceRepository,
-            final ConfigurationDomainService configurationDomainService) {
+            final ToApiJsonSerializer<Map<String, Object>> toApiJsonSerializer,
+            final ToApiJsonSerializer<CommandProcessingResult> toApiResultJsonSerializer,
+            final CommandSourceRepository commandSourceRepository, final ConfigurationDomainService configurationDomainService) {
         this.context = context;
         this.context = context;
         this.applicationContext = applicationContext;
         this.toApiJsonSerializer = toApiJsonSerializer;
+        this.toApiResultJsonSerializer = toApiResultJsonSerializer;
         this.commandSourceRepository = commandSourceRepository;
         this.commandSourceRepository = commandSourceRepository;
         this.configurationDomainService = configurationDomainService;
@@ -53,13 +59,12 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
     public CommandProcessingResult processAndLogCommand(final CommandWrapper wrapper, final JsonCommand command,
             final boolean isApprovedByChecker) {
 
-        final boolean rollbackTransaction = this.configurationDomainService.isMakerCheckerEnabledForTask(wrapper.taskPermissionName())
-                && !isApprovedByChecker;
+        final boolean rollbackTransaction = this.configurationDomainService.isMakerCheckerEnabledForTask(wrapper.taskPermissionName());
 
         final NewCommandSourceHandler handler = findCommandHandler(wrapper);
         final CommandProcessingResult result = handler.processCommand(command);
 
-        final AppUser maker = this.context.authenticatedUser();
+        final AppUser maker = this.context.authenticatedUser(wrapper);
 
         CommandSource commandSourceResult = null;
         if (command.commandId() != null) {
@@ -70,7 +75,7 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
         }
         commandSourceResult.updateResourceId(result.resourceId());
         commandSourceResult.updateForAudit(result.getOfficeId(), result.getGroupId(), result.getClientId(), result.getLoanId(),
-                result.getSavingsId(), result.getProductId());
+                result.getSavingsId(), result.getProductId(), result.getTransactionId());
 
         String changesOnlyJson = null;
         if (result.hasChanges()) {
@@ -86,7 +91,24 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
             this.commandSourceRepository.save(commandSourceResult);
         }
 
-        if (rollbackTransaction) { throw new RollbackTransactionAsCommandIsNotApprovedByCheckerException(commandSourceResult); }
+        if ((rollbackTransaction || result.isRollbackTransaction()) && !isApprovedByChecker) {
+            /*
+             * JournalEntry will generate a new transactionId every time.
+             * Updating the transactionId with old transactionId, because as
+             * there are no entries are created with new transactionId, will
+             * throw an error when checker approves the transaction
+             */
+            commandSourceResult.updateTransaction(command.getTransactionId());
+            /*
+             * Update CommandSource json data with JsonCommand json data, line
+             * 77 and 81 may update the json data
+             */
+            commandSourceResult.updateJsonTo(command.json());
+            throw new RollbackTransactionAsCommandIsNotApprovedByCheckerException(commandSourceResult);
+        }
+        result.setRollbackTransaction(null);
+
+        publishEvent(wrapper.entityName(), wrapper.actionName(), result);
 
         return result;
     }
@@ -108,6 +130,8 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
         if (wrapper.isAccountTransferResource()) {
             if (wrapper.isCreate()) {
                 handler = this.applicationContext.getBean("createAccountTransferCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isRefundByTransfer()) {
+                handler = this.applicationContext.getBean("refundByTransferCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -130,6 +154,8 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("deleteOneToManyDatatableEntryCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isDeleteOneToOne()) {
                 handler = this.applicationContext.getBean("deleteOneToOneDatatableEntryCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isRegisterDatatable()) {
+                handler = this.applicationContext.getBean("registerDatatableCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -178,6 +204,14 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("acceptClientTransferCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isRejectClientTransfer()) {
                 handler = this.applicationContext.getBean("rejectClientTransferCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdateClientSavingsAccount()) {
+                handler = this.applicationContext.getBean("updateClientSavingsAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isReject()) {
+                handler = this.applicationContext.getBean("rejectClientCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isWithdrawn()) {
+                handler = this.applicationContext.getBean("withdrawClientCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isReactivated()) {
+                handler = this.applicationContext.getBean("reActivateClientCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -187,15 +221,19 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
         } else if (wrapper.isPermissionResource()) {
             handler = this.applicationContext.getBean("updateMakerCheckerPermissionsCommandHandler", NewCommandSourceHandler.class);
         } else if (wrapper.isRoleResource()) {
-
             if (wrapper.isCreate()) {
                 handler = this.applicationContext.getBean("createRoleCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isUpdate()) {
                 handler = this.applicationContext.getBean("updateRoleCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteRoleCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDisable()) {
+                handler = this.applicationContext.getBean("disableRoleCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isEnable()) {
+                handler = this.applicationContext.getBean("enableRoleCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
-
         } else if (wrapper.isUserResource()) {
             if (wrapper.isCreate()) {
                 handler = this.applicationContext.getBean("createUserCommandHandler", NewCommandSourceHandler.class);
@@ -203,6 +241,16 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("updateUserCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isDelete()) {
                 handler = this.applicationContext.getBean("deleteUserCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isHookResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createHookCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateHookCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteHookCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -221,6 +269,26 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("updateGuarantorCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isDelete()) {
                 handler = this.applicationContext.getBean("deleteGuarantorCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isTellerResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createTellerCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateTellerCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteTellerCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isAllocateCashier()) {
+                handler = this.applicationContext.getBean("allocateCashierToTellerCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdateCashierAllocation()) {
+                handler = this.applicationContext.getBean("updateCashierAllocationCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDeleteCashierAllocation()) {
+                handler = this.applicationContext.getBean("deleteCashierAllocationCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isAllocateCashToCashier()) {
+                handler = this.applicationContext.getBean("allocateCashToCashierCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isSettleCashFromCashier()) {
+                handler = this.applicationContext.getBean("settleCashFromCashierCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -320,10 +388,14 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("loanApplicationRejectedCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isDisbursementOfLoan()) {
                 handler = this.applicationContext.getBean("disburseLoanCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDisbursementOfLoanToSavings()) {
+                handler = this.applicationContext.getBean("disburseLoanToSavingsCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isUndoDisbursementOfLoan()) {
                 handler = this.applicationContext.getBean("undoDisbursalLoanCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isLoanRepayment()) {
                 handler = this.applicationContext.getBean("loanRepaymentCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isLoanRecoveryPayment()) {
+                handler = this.applicationContext.getBean("loanRecoveryPaymentCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isLoanRepaymentAdjustment()) {
                 handler = this.applicationContext.getBean("loanRepaymentAdjustmentCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isWaiveInterestPortionOnLoan()) {
@@ -348,7 +420,13 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("loanApplicationDeletionCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isUndoLoanWriteOff()) {
                 handler = this.applicationContext.getBean("undoWriteOffLoanCommandHandler", NewCommandSourceHandler.class);
-            }else {
+            } else if (wrapper.isGuaranteeRecovery()) {
+                handler = this.applicationContext.getBean("recoverFromGuarantorCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isLoanRefundByCash()) {
+                handler = this.applicationContext.getBean("loanRefundByCashCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUndoLoanRefund()) {
+                handler = this.applicationContext.getBean("loanRefundAdjustmentCommandHandler", NewCommandSourceHandler.class);
+            } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
         } else if (wrapper.isLoanChargeResource()) {
@@ -362,6 +440,13 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("waiveLoanChargeCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isPayLoanCharge()) {
                 handler = this.applicationContext.getBean("payLoanChargeCommandHandler", NewCommandSourceHandler.class);
+            }
+        } else if (wrapper.isLoanDisburseDetailResource()) {
+            if (wrapper.isUpdateDisbursementDate()) {
+                handler = this.applicationContext.getBean("updateLoanDisbuseDateCommandHandler", NewCommandSourceHandler.class);
+            }
+            if (wrapper.addAndDeleteDisbursementDetails()) {
+                handler = this.applicationContext.getBean("addAndDeleteLoanDisburseDetailsCommandHandler", NewCommandSourceHandler.class);
             }
         } else if (wrapper.isGLAccountResource()) {
             if (wrapper.isCreate()) {
@@ -388,10 +473,16 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("createJournalEntryCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isRevertJournalEntry()) {
                 handler = this.applicationContext.getBean("reverseJournalEntryCommandHandler", NewCommandSourceHandler.class);
-            }else if(wrapper.isUpdateRunningbalance()){
+            } else if (wrapper.isUpdateRunningbalance()) {
                 handler = this.applicationContext.getBean("updateRunningBalanceCommandHandler", NewCommandSourceHandler.class);
-            }else {
+            } else if (wrapper.isDefineOpeningalance()) {
+                handler = this.applicationContext.getBean("defineOpeningBalanceCommandHandler", NewCommandSourceHandler.class);
+            } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isPeriodicAccrualResource()) {
+            if (wrapper.isExecute()) {
+                handler = this.applicationContext.getBean("executePeriodicAccrualCommandHandler", NewCommandSourceHandler.class);
             }
         } else if (wrapper.isSavingsProductResource()) {
             if (wrapper.isCreate()) {
@@ -400,6 +491,26 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("updateSavingsProductCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isDelete()) {
                 handler = this.applicationContext.getBean("deleteSavingsProductCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isFixedDepositProductResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createFixedDepositProductCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateFixedDepositProductCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteFixedDepositProductCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isRecurringDepositProductResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createRecurringDepositProductCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateRecurringDepositProductCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteRecurringDepositProductCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -432,14 +543,21 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("calculateInterestSavingsAccountCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isSavingsAccountInterestPosting()) {
                 handler = this.applicationContext.getBean("postInterestSavingsAccountCommandHandler", NewCommandSourceHandler.class);
-            } /*else if (wrapper.isSavingsAccountApplyAnnualFee()) {
-                handler = this.applicationContext.getBean("applyAnnualFeeSavingsAccountCommandHandler", NewCommandSourceHandler.class);
-            } */else if (wrapper.isSavingsAccountUndoTransaction()) {
+            } /*
+               * else if (wrapper.isSavingsAccountApplyAnnualFee()) { handler =
+               * this.applicationContext.getBean(
+               * "applyAnnualFeeSavingsAccountCommandHandler",
+               * NewCommandSourceHandler.class); }
+               */else if (wrapper.isSavingsAccountUndoTransaction()) {
                 handler = this.applicationContext.getBean("undoTransactionSavingsAccountCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isAdjustSavingsAccountTransaction()) {
                 handler = this.applicationContext.getBean("savingsTransactionAdjustmentCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isSavingsAccountClose()) {
                 handler = this.applicationContext.getBean("closeSavingsAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdateSavingsOfficer()) {
+                handler = this.applicationContext.getBean("updateSavingsOfficerCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isRemoveSavingsOfficer()) {
+                handler = this.applicationContext.getBean("removeSavingsOfficerCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -454,6 +572,124 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("waiveSavingsAccountChargeCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isPaySavingsAccountCharge()) {
                 handler = this.applicationContext.getBean("paySavingsAccountChargeCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isInactivateSavingsAccountCharge()) {
+                handler = this.applicationContext.getBean("inactivateSavingsAccountChargeCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isFixedDepositAccountResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationSubmittalCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationModificationCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationDeletionCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isRejectionOfFixedDepositAccountApplication()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationRejectedCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isWithdrawFixedDepositAccountApplicationByApplicant()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationWithdrawnByApplicantCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isApprovalOfFixedDepositAccountApplication()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationApprovalCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isUndoApprovalOfFixedDepositAccountApplication()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountApplicationApprovalUndoCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isDeposit()) {
+                handler = this.applicationContext.getBean("fixedDepositAccountDepositCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isWithdrawal()) {
+                handler = this.applicationContext.getBean("withdrawalFixedDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isActivation()) {
+                handler = this.applicationContext.getBean("activateFixedDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isInterestCalculation()) {
+                handler = this.applicationContext.getBean("calculateInterestFixedDepositAccountCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isInterestPosting()) {
+                handler = this.applicationContext.getBean("postInterestFixedDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUndoTransaction()) {
+                handler = this.applicationContext
+                        .getBean("undoTransactionFixedDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isAdjustTransaction()) {
+                handler = this.applicationContext.getBean("fixedDepositTransactionAdjustmentCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDepositAccountClose()) {
+                handler = this.applicationContext.getBean("closeFixedDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDepositAccountPrematureClose()) {
+                handler = this.applicationContext.getBean("prematureCloseFixedDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isRecurringDepositAccountResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationSubmittalCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationModificationCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationDeletionCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isRejectionOfRecurringDepositAccountApplication()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationRejectedCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isWithdrawRecurringDepositAccountApplicationByApplicant()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationWithdrawnByApplicantCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isApprovalOfRecurringDepositAccountApplication()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationApprovalCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isUndoApprovalOfRecurringDepositAccountApplication()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountApplicationApprovalUndoCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isDepositAmountUpdateForRecurringDepositAccount()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountUpdateDepositAmountCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isDeposit()) {
+                handler = this.applicationContext.getBean("recurringDepositAccountDepositCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isWithdrawal()) {
+                handler = this.applicationContext.getBean("withdrawalRecurringDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isActivation()) {
+                handler = this.applicationContext.getBean("activateRecurringDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isInterestCalculation()) {
+                handler = this.applicationContext.getBean("calculateInterestRecurringDepositAccountCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isInterestPosting()) {
+                handler = this.applicationContext.getBean("postInterestRecurringDepositAccountCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isUndoTransaction()) {
+                handler = this.applicationContext.getBean("undoTransactionRecurringDepositAccountCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isAdjustTransaction()) {
+                handler = this.applicationContext.getBean("recurringDepositTransactionAdjustmentCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else if (wrapper.isDepositAccountClose()) {
+                handler = this.applicationContext.getBean("closeRecurringDepositAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDepositAccountPrematureClose()) {
+                handler = this.applicationContext.getBean("prematureCloseRecurringDepositAccountCommandHandler",
+                        NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isInterestRateChartResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createInterestRateChartCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateInterestRateChartCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteInterestRateChartCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isInterestRateChartSlabResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createInterestRateChartSlabCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateInterestRateChartSlabCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteInterestRateChartSlabCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -512,12 +748,18 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 handler = this.applicationContext.getBean("saveCenterCollectionSheetCommandHandler", NewCommandSourceHandler.class);
             } else if (wrapper.isCenterClose()) {
                 handler = this.applicationContext.getBean("closeCenterCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isCenterDisassociateGroups()) {
+                handler = this.applicationContext.getBean("disassociateGroupsFromCenterCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isCenterAssociateGroups()) {
+                handler = this.applicationContext.getBean("associateGroupsToCenterCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
         } else if (wrapper.isCollectionSheetResource()) {
             if (wrapper.isUpdate()) {
                 handler = this.applicationContext.getBean("updateCollectionSheetCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isSaveIndividualCollectionSheet()) {
+                handler = this.applicationContext.getBean("saveIndividualCollectionSheetCommandHandler", NewCommandSourceHandler.class);
             } else {
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
@@ -616,11 +858,123 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
                 throw new UnsupportedCommandException(wrapper.commandName());
             }
 
+        } else if (wrapper.isStandingInstruction()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createStandingInstructionCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateStandingInstructionCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteStandingInstructionCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+
+        } else if (wrapper.isFinancialActivityAccountMapping()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createFinancialActivityAccountHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateFinancialActivityAccountCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteFinancialActivityAccountCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isLikelihoodResource()) {
+            if (wrapper.isUpdateLikelihood()) {
+                handler = this.applicationContext.getBean("updateLikelihoodCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isSurveyResource()) {
+            if (wrapper.isRegisterSurvey()) {
+                handler = this.applicationContext.getBean("registerSurveyCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isFullFilSurvey()) {
+                handler = this.applicationContext.getBean("fullFilSurveyCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isLoanRescheduleResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createLoanRescheduleRequestCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isApprove()) {
+                handler = this.applicationContext.getBean("approveLoanRescheduleRequestCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isReject()) {
+                handler = this.applicationContext.getBean("rejectLoanRescheduleRequestCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isAccountNumberFormatResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createAccountNumberFormatCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateAccountNumberFormatCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteAccountNumberFormatCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isEntityMappingResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createEntityToEntityMappingCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateEntityToEntityMappingCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deleteEntityToEntityMappingCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isWorkingDaysResource()) {
+            if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updateWorkingDaysCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+        } else if (wrapper.isPasswordPreferencesResource()) {
+            if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updatePasswordPreferencesCommandHandler", NewCommandSourceHandler.class);
+
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+
+        } else if (wrapper.isPaymentTypeResource()) {
+            if (wrapper.isCreate()) {
+                handler = this.applicationContext.getBean("createPaymentTypeCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isUpdate()) {
+                handler = this.applicationContext.getBean("updatePaymentTypeCommandHandler", NewCommandSourceHandler.class);
+            } else if (wrapper.isDelete()) {
+                handler = this.applicationContext.getBean("deletePaymentTypeCommandHandler", NewCommandSourceHandler.class);
+            } else {
+                throw new UnsupportedCommandException(wrapper.commandName());
+            }
+
         } else {
 
             throw new UnsupportedCommandException(wrapper.commandName());
         }
 
         return handler;
+    }
+
+    @Override
+    public boolean validateCommand(final CommandWrapper commandWrapper, final AppUser user) {
+        boolean rollbackTransaction = this.configurationDomainService.isMakerCheckerEnabledForTask(commandWrapper.taskPermissionName());
+        user.validateHasPermissionTo(commandWrapper.getTaskPermissionName());
+        return rollbackTransaction;
+    }
+
+    private void publishEvent(final String entityName, final String actionName, final CommandProcessingResult result) {
+
+        final String authToken = ThreadLocalContextUtil.getAuthToken();
+        final String tenantIdentifier = ThreadLocalContextUtil.getTenant().getTenantIdentifier();
+        final AppUser appUser = this.context.authenticatedUser();
+
+        final HookEventSource hookEventSource = new HookEventSource(entityName, actionName);
+
+        final String serializedResult = this.toApiResultJsonSerializer.serialize(result);
+
+        final HookEvent applicationEvent = new HookEvent(hookEventSource, serializedResult, tenantIdentifier, appUser, authToken);
+
+        applicationContext.publishEvent(applicationEvent);
     }
 }

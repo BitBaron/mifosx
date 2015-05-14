@@ -8,17 +8,23 @@ package org.mifosplatform.portfolio.group.service;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.mifosplatform.infrastructure.codes.data.CodeValueData;
 import org.mifosplatform.infrastructure.codes.service.CodeValueReadPlatformService;
 import org.mifosplatform.infrastructure.core.api.ApiParameterHelper;
+import org.mifosplatform.infrastructure.core.data.PaginationParameters;
+import org.mifosplatform.infrastructure.core.data.PaginationParametersDataValidator;
 import org.mifosplatform.infrastructure.core.domain.JdbcSupport;
 import org.mifosplatform.infrastructure.core.service.Page;
 import org.mifosplatform.infrastructure.core.service.PaginationHelper;
 import org.mifosplatform.infrastructure.core.service.RoutingDataSource;
+import org.mifosplatform.infrastructure.core.service.SearchParameters;
 import org.mifosplatform.infrastructure.security.service.PlatformSecurityContext;
 import org.mifosplatform.organisation.office.data.OfficeData;
 import org.mifosplatform.organisation.office.service.OfficeReadPlatformService;
@@ -51,13 +57,17 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
     private final CodeValueReadPlatformService codeValueReadPlatformService;
 
     private final AllGroupTypesDataMapper allGroupTypesDataMapper = new AllGroupTypesDataMapper();
-    private final PaginationHelper<GroupGeneralData> paginationHelper = new PaginationHelper<GroupGeneralData>();
+    private final PaginationHelper<GroupGeneralData> paginationHelper = new PaginationHelper<>();
+    private final PaginationParametersDataValidator paginationParametersDataValidator;
+
+    private final static Set<String> supportedOrderByValues = new HashSet<>(Arrays.asList("id", "name", "officeId", "officeName"));
 
     @Autowired
     public GroupReadPlatformServiceImpl(final PlatformSecurityContext context, final RoutingDataSource dataSource,
             final CenterReadPlatformService centerReadPlatformService, final ClientReadPlatformService clientReadPlatformService,
             final OfficeReadPlatformService officeReadPlatformService, final StaffReadPlatformService staffReadPlatformService,
-            final CodeValueReadPlatformService codeValueReadPlatformService) {
+            final CodeValueReadPlatformService codeValueReadPlatformService,
+            final PaginationParametersDataValidator paginationParametersDataValidator) {
         this.context = context;
         this.jdbcTemplate = new JdbcTemplate(dataSource);
         this.centerReadPlatformService = centerReadPlatformService;
@@ -65,6 +75,7 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
         this.officeReadPlatformService = officeReadPlatformService;
         this.staffReadPlatformService = staffReadPlatformService;
         this.codeValueReadPlatformService = codeValueReadPlatformService;
+        this.paginationParametersDataValidator = paginationParametersDataValidator;
     }
 
     @Override
@@ -118,8 +129,9 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
     }
 
     @Override
-    public Page<GroupGeneralData> retrieveAll(final SearchParameters searchParameters) {
+    public Page<GroupGeneralData> retrievePagedAll(final SearchParameters searchParameters, final PaginationParameters parameters) {
 
+        this.paginationParametersDataValidator.validateParameterValues(parameters, supportedOrderByValues, "audits");
         final AppUser currentUser = this.context.authenticatedUser();
         final String hierarchy = currentUser.getOffice().getHierarchy();
         final String hierarchySearchString = hierarchy + "%";
@@ -135,11 +147,11 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
             sqlBuilder.append(" and (").append(extraCriteria).append(")");
         }
 
-        if (searchParameters.isOrderByRequested()) {
+        if (parameters.isOrderByRequested()) {
             sqlBuilder.append(" order by ").append(searchParameters.getOrderBy()).append(' ').append(searchParameters.getSortOrder());
         }
 
-        if (searchParameters.isLimited()) {
+        if (parameters.isLimited()) {
             sqlBuilder.append(" limit ").append(searchParameters.getLimit());
             if (searchParameters.isOffset()) {
                 sqlBuilder.append(" offset ").append(searchParameters.getOffset());
@@ -151,45 +163,82 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
                 new Object[] { hierarchySearchString }, this.allGroupTypesDataMapper);
     }
 
+    @Override
+    public Collection<GroupGeneralData> retrieveAll(SearchParameters searchParameters, final PaginationParameters parameters) {
+        final AppUser currentUser = this.context.authenticatedUser();
+        final String hierarchy = currentUser.getOffice().getHierarchy();
+        final String hierarchySearchString = hierarchy + "%";
+
+        final StringBuilder sqlBuilder = new StringBuilder(200);
+        sqlBuilder.append("select ");
+        sqlBuilder.append(this.allGroupTypesDataMapper.schema());
+        sqlBuilder.append(" where o.hierarchy like ?");
+
+        final String extraCriteria = getGroupExtraCriteria(searchParameters);
+
+        if (StringUtils.isNotBlank(extraCriteria)) {
+            sqlBuilder.append(" and (").append(extraCriteria).append(")");
+        }
+
+        if (parameters.isOrderByRequested()) {
+            sqlBuilder.append(parameters.orderBySql());
+        }
+
+        if (parameters.isLimited()) {
+            sqlBuilder.append(parameters.limitSql());
+        }
+
+        return this.jdbcTemplate.query(sqlBuilder.toString(), this.allGroupTypesDataMapper, new Object[] { hierarchySearchString });
+    }
+
     // 'g.' preffix because of ERROR 1052 (23000): Column 'column_name' in where
     // clause is ambiguous
     // caused by the same name of columns in m_office and m_group tables
     private String getGroupExtraCriteria(final SearchParameters searchCriteria) {
 
-        String extraCriteria = " and g.level_Id = " + GroupTypes.GROUP.getId();
-
+        StringBuffer extraCriteria = new StringBuffer(200);
+        extraCriteria.append(" and g.level_Id = ").append(GroupTypes.GROUP.getId());
         String sqlSearch = searchCriteria.getSqlSearch();
         if (sqlSearch != null) {
             sqlSearch = sqlSearch.replaceAll(" display_name ", " g.display_name ");
             sqlSearch = sqlSearch.replaceAll("display_name ", "g.display_name ");
-            extraCriteria += " and (" + sqlSearch + ")";
+            extraCriteria.append(" and ( ").append(sqlSearch).append(") ");
         }
 
         final Long officeId = searchCriteria.getOfficeId();
         if (officeId != null) {
-            extraCriteria += " and g.office_id = " + officeId;
+            extraCriteria.append(" and g.office_id = ").append(officeId);
         }
 
         final String externalId = searchCriteria.getExternalId();
         if (externalId != null) {
-            extraCriteria += " and g.external_id = " + ApiParameterHelper.sqlEncodeString(externalId);
+            extraCriteria.append(" and g.external_id = ").append(ApiParameterHelper.sqlEncodeString(externalId));
         }
 
         final String name = searchCriteria.getName();
         if (name != null) {
-            extraCriteria += " and g.display_name like " + ApiParameterHelper.sqlEncodeString("%" + name + "%");
+            extraCriteria.append(" and g.display_name like ").append(ApiParameterHelper.sqlEncodeString("%" + name + "%"));
         }
 
         final String hierarchy = searchCriteria.getHierarchy();
         if (hierarchy != null) {
-            extraCriteria += " and o.hierarchy like " + ApiParameterHelper.sqlEncodeString(hierarchy + "%");
+            extraCriteria.append(" and o.hierarchy like ").append(ApiParameterHelper.sqlEncodeString(hierarchy + "%"));
         }
 
-        if (StringUtils.isNotBlank(extraCriteria)) {
-            extraCriteria = extraCriteria.substring(4);
+        if (searchCriteria.isStaffIdPassed()) {
+            extraCriteria.append(" and g.staff_id = ").append(searchCriteria.getStaffId());
         }
 
-        return extraCriteria;
+        if (StringUtils.isNotBlank(extraCriteria.toString())) {
+            extraCriteria.delete(0, 4);
+        }
+
+        final Long staffId = searchCriteria.getStaffId();
+        if (staffId != null) {
+            extraCriteria.append(" and g.staff_id = ").append(staffId);
+        }
+
+        return extraCriteria.toString();
     }
 
     @Override
@@ -231,7 +280,7 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
 
     @Override
     public GroupGeneralData retrieveGroupWithClosureReasons() {
-        final List<CodeValueData> closureReasons = new ArrayList<CodeValueData>(
+        final List<CodeValueData> closureReasons = new ArrayList<>(
                 this.codeValueReadPlatformService.retrieveCodeValuesByCode(GroupingTypesApiConstants.GROUP_CLOSURE_REASON));
         return GroupGeneralData.withClosureReasons(closureReasons);
     }

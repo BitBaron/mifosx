@@ -34,9 +34,13 @@ import org.mifosplatform.organisation.workingdays.service.WorkingDaysUtil;
 import org.mifosplatform.portfolio.calendar.domain.Calendar;
 import org.mifosplatform.portfolio.calendar.domain.CalendarFrequencyType;
 import org.mifosplatform.portfolio.calendar.domain.CalendarWeekDaysType;
-import org.mifosplatform.portfolio.loanproduct.domain.PeriodFrequencyType;
+import org.mifosplatform.portfolio.common.domain.PeriodFrequencyType;
 
 public class CalendarUtils {
+
+    static {
+        System.setProperty("net.fortuna.ical4j.timezone.date.floating", "true");
+    }
 
     public static LocalDate getNextRecurringDate(final String recurringRule, final LocalDate seedDate, final LocalDate startDate) {
         final Recur recur = CalendarUtils.getICalRecur(recurringRule);
@@ -106,7 +110,7 @@ public class CalendarUtils {
 
     private static Collection<LocalDate> convertToLocalDateList(final DateList dates) {
 
-        final Collection<LocalDate> recurringDates = new ArrayList<LocalDate>();
+        final Collection<LocalDate> recurringDates = new ArrayList<>();
 
         for (@SuppressWarnings("rawtypes")
         final Iterator iterator = dates.iterator(); iterator.hasNext();) {
@@ -286,17 +290,17 @@ public class CalendarUtils {
         final Recur recur = CalendarUtils.getICalRecur(recurringRule);
         return recur.getInterval();
     }
-    
-    public static CalendarFrequencyType getFrequency(final String recurringRule){
+
+    public static CalendarFrequencyType getFrequency(final String recurringRule) {
         final Recur recur = CalendarUtils.getICalRecur(recurringRule);
         return CalendarFrequencyType.fromString(recur.getFrequency());
     }
-    
-    public static CalendarWeekDaysType getRepeatsOnDay(final String recurringRule){
+
+    public static CalendarWeekDaysType getRepeatsOnDay(final String recurringRule) {
         final Recur recur = CalendarUtils.getICalRecur(recurringRule);
         final WeekDayList weekDays = recur.getDayList();
-        if(weekDays.isEmpty()) return CalendarWeekDaysType.INVALID;
-        //supports only one day        
+        if (weekDays.isEmpty()) return CalendarWeekDaysType.INVALID;
+        // supports only one day
         WeekDay weekDay = (WeekDay) weekDays.get(0);
         return CalendarWeekDaysType.fromString(weekDay.getDay());
     }
@@ -394,7 +398,7 @@ public class CalendarUtils {
     }
 
     public static List<Integer> createIntegerListFromQueryParameter(final String calendarTypeQuery) {
-        final List<Integer> calendarTypeOptions = new ArrayList<Integer>();
+        final List<Integer> calendarTypeOptions = new ArrayList<>();
         // adding all calendar Types if query parameter is "all"
         if (calendarTypeQuery.equalsIgnoreCase("all")) {
             calendarTypeOptions.add(1);
@@ -405,7 +409,7 @@ public class CalendarUtils {
         }
         // creating a list of calendar type options from the comma separated
         // query parameter.
-        final List<String> calendarTypeOptionsInQuery = new ArrayList<String>();
+        final List<String> calendarTypeOptionsInQuery = new ArrayList<>();
         final StringTokenizer st = new StringTokenizer(calendarTypeQuery, ",");
         while (st.hasMoreElements()) {
             calendarTypeOptionsInQuery.add(st.nextElement().toString());
@@ -461,5 +465,20 @@ public class CalendarUtils {
         }
 
         return getNextRecurringDate(recur, seedDate, currentDate);
+    }
+
+    public static LocalDate getNextScheduleDate(final Calendar calendar, final LocalDate startDate) {
+        final Recur recur = CalendarUtils.getICalRecur(calendar.getRecurrence());
+        if (recur == null) { return null; }
+        LocalDate date = startDate;
+        final LocalDate seedDate = calendar.getStartDateLocalDate();
+        /**
+         * if (isValidRedurringDate(calendar.getRecurrence(), seedDate, date)) {
+         * date = date.plusDays(1); }
+         **/
+
+        final LocalDate scheduleDate = getNextRecurringDate(recur, seedDate, date);
+
+        return scheduleDate;
     }
 }

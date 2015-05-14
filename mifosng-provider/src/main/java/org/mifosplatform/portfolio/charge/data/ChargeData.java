@@ -14,6 +14,7 @@ import org.joda.time.LocalDate;
 import org.joda.time.MonthDay;
 import org.mifosplatform.infrastructure.core.data.EnumOptionData;
 import org.mifosplatform.organisation.monetary.data.CurrencyData;
+import org.mifosplatform.portfolio.charge.domain.ChargeTimeType;
 import org.mifosplatform.portfolio.loanaccount.data.LoanChargeData;
 import org.mifosplatform.portfolio.savings.data.SavingsAccountChargeData;
 
@@ -36,42 +37,47 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
     private final Integer feeInterval;
     private final BigDecimal minCap;
     private final BigDecimal maxCap;
+    private final EnumOptionData feeFrequency;
 
     private final Collection<CurrencyData> currencyOptions;
     private final List<EnumOptionData> chargeCalculationTypeOptions;//
     private final List<EnumOptionData> chargeAppliesToOptions;//
     private final List<EnumOptionData> chargeTimeTypeOptions;//
     private final List<EnumOptionData> chargePaymetModeOptions;//
-    
+
     private final List<EnumOptionData> loanChargeCalculationTypeOptions;
-    private final List<EnumOptionData> loanChargeTimeTypeOptions;    
+    private final List<EnumOptionData> loanChargeTimeTypeOptions;
     private final List<EnumOptionData> savingsChargeCalculationTypeOptions;
     private final List<EnumOptionData> savingsChargeTimeTypeOptions;
+    private final List<EnumOptionData> feeFrequencyOptions;
 
     public static ChargeData template(final Collection<CurrencyData> currencyOptions,
             final List<EnumOptionData> chargeCalculationTypeOptions, final List<EnumOptionData> chargeAppliesToOptions,
             final List<EnumOptionData> chargeTimeTypeOptions, final List<EnumOptionData> chargePaymentModeOptions,
             final List<EnumOptionData> loansChargeCalculationTypeOptions, final List<EnumOptionData> loansChargeTimeTypeOptions,
-            final List<EnumOptionData> savingsChargeCalculationTypeOptions, final List<EnumOptionData> savingsChargeTimeTypeOptions) {
+            final List<EnumOptionData> savingsChargeCalculationTypeOptions, final List<EnumOptionData> savingsChargeTimeTypeOptions,
+            final List<EnumOptionData> feeFrequencyOptions) {
 
         return new ChargeData(null, null, null, null, null, null, null, null, false, false, currencyOptions, chargeCalculationTypeOptions,
                 chargeAppliesToOptions, chargeTimeTypeOptions, chargePaymentModeOptions, loansChargeCalculationTypeOptions,
-                loansChargeTimeTypeOptions, savingsChargeCalculationTypeOptions, savingsChargeTimeTypeOptions, null, null,null,null);
+                loansChargeTimeTypeOptions, savingsChargeCalculationTypeOptions, savingsChargeTimeTypeOptions, null, null, null, null,
+                null, feeFrequencyOptions);
     }
 
     public static ChargeData withTemplate(final ChargeData charge, final ChargeData template) {
         return new ChargeData(charge.id, charge.name, charge.amount, charge.currency, charge.chargeTimeType, charge.chargeAppliesTo,
-                charge.chargeCalculationType, charge.chargePaymentMode, charge.penalty, charge.active,template.currencyOptions,
+                charge.chargeCalculationType, charge.chargePaymentMode, charge.penalty, charge.active, template.currencyOptions,
                 template.chargeCalculationTypeOptions, template.chargeAppliesToOptions, template.chargeTimeTypeOptions,
                 template.chargePaymetModeOptions, template.loanChargeCalculationTypeOptions, template.loanChargeTimeTypeOptions,
-                template.savingsChargeCalculationTypeOptions, template.savingsChargeTimeTypeOptions, charge.feeOnMonthDay, charge.feeInterval,charge.minCap,charge.maxCap);
+                template.savingsChargeCalculationTypeOptions, template.savingsChargeTimeTypeOptions, charge.feeOnMonthDay,
+                charge.feeInterval, charge.minCap, charge.maxCap, charge.feeFrequency, template.feeFrequencyOptions);
     }
 
     public static ChargeData instance(final Long id, final String name, final BigDecimal amount, final CurrencyData currency,
             final EnumOptionData chargeTimeType, final EnumOptionData chargeAppliesTo, final EnumOptionData chargeCalculationType,
-            final EnumOptionData chargePaymentMode, final MonthDay feeOnMonthDay, final Integer feeInterval, final boolean penalty, final boolean active,
-            final BigDecimal minCap, final BigDecimal maxCap) {
-        
+            final EnumOptionData chargePaymentMode, final MonthDay feeOnMonthDay, final Integer feeInterval, final boolean penalty,
+            final boolean active, final BigDecimal minCap, final BigDecimal maxCap, final EnumOptionData feeFrequency) {
+
         final Collection<CurrencyData> currencyOptions = null;
         final List<EnumOptionData> chargeCalculationTypeOptions = null;
         final List<EnumOptionData> chargeAppliesToOptions = null;
@@ -81,11 +87,13 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
         final List<EnumOptionData> loansChargeTimeTypeOptions = null;
         final List<EnumOptionData> savingsChargeCalculationTypeOptions = null;
         final List<EnumOptionData> savingsChargeTimeTypeOptions = null;
-        
+        final List<EnumOptionData> feeFrequencyOptions = null;
+
         return new ChargeData(id, name, amount, currency, chargeTimeType, chargeAppliesTo, chargeCalculationType, chargePaymentMode,
                 penalty, active, currencyOptions, chargeCalculationTypeOptions, chargeAppliesToOptions, chargeTimeTypeOptions,
                 chargePaymentModeOptions, loansChargeCalculationTypeOptions, loansChargeTimeTypeOptions,
-                savingsChargeCalculationTypeOptions, savingsChargeTimeTypeOptions, feeOnMonthDay, feeInterval,minCap,maxCap);
+                savingsChargeCalculationTypeOptions, savingsChargeTimeTypeOptions, feeOnMonthDay, feeInterval, minCap, maxCap,
+                feeFrequency, feeFrequencyOptions);
     }
 
     public static ChargeData lookup(final Long id, final String name, final boolean isPenalty) {
@@ -110,11 +118,14 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
         final List<EnumOptionData> loansChargeTimeTypeOptions = null;
         final List<EnumOptionData> savingsChargeCalculationTypeOptions = null;
         final List<EnumOptionData> savingsChargeTimeTypeOptions = null;
-        
+        final EnumOptionData feeFrequency = null;
+        final List<EnumOptionData> feeFrequencyOptions = null;
+
         return new ChargeData(id, name, amount, currency, chargeTimeType, chargeAppliesTo, chargeCalculationType, chargePaymentMode,
                 penalty, active, currencyOptions, chargeCalculationTypeOptions, chargeAppliesToOptions, chargeTimeTypeOptions,
                 chargePaymentModeOptions, loansChargeCalculationTypeOptions, loansChargeTimeTypeOptions,
-                savingsChargeCalculationTypeOptions, savingsChargeTimeTypeOptions, feeOnMonthDay, feeInterval,minCap,maxCap);
+                savingsChargeCalculationTypeOptions, savingsChargeTimeTypeOptions, feeOnMonthDay, feeInterval, minCap, maxCap,
+                feeFrequency, feeFrequencyOptions);
     }
 
     private ChargeData(final Long id, final String name, final BigDecimal amount, final CurrencyData currency,
@@ -125,7 +136,8 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
             final List<EnumOptionData> chargePaymentModeOptions, final List<EnumOptionData> loansChargeCalculationTypeOptions,
             final List<EnumOptionData> loansChargeTimeTypeOptions, final List<EnumOptionData> savingsChargeCalculationTypeOptions,
             final List<EnumOptionData> savingsChargeTimeTypeOptions, final MonthDay feeOnMonthDay, final Integer feeInterval,
-            final BigDecimal minCap,final BigDecimal maxCap) {
+            final BigDecimal minCap, final BigDecimal maxCap, final EnumOptionData feeFrequency,
+            final List<EnumOptionData> feeFrequencyOptions) {
         this.id = id;
         this.name = name;
         this.amount = amount;
@@ -149,6 +161,8 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
         this.savingsChargeTimeTypeOptions = savingsChargeTimeTypeOptions;
         this.loanChargeCalculationTypeOptions = loansChargeCalculationTypeOptions;
         this.loanChargeTimeTypeOptions = loansChargeTimeTypeOptions;
+        this.feeFrequency = feeFrequency;
+        this.feeFrequencyOptions = feeFrequencyOptions;
     }
 
     @Override
@@ -177,7 +191,7 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
         }
 
         return LoanChargeData.newLoanChargeDetails(this.id, this.name, this.currency, this.amount, percentage, this.chargeTimeType,
-                this.chargeCalculationType, this.penalty, this.chargePaymentMode,this.minCap,this.maxCap);
+                this.chargeCalculationType, this.penalty, this.chargePaymentMode, this.minCap, this.maxCap);
     }
 
     public SavingsAccountChargeData toSavingsAccountChargeData() {
@@ -192,9 +206,24 @@ public class ChargeData implements Comparable<ChargeData>, Serializable {
         final BigDecimal amountPercentageAppliedTo = BigDecimal.ZERO;
         final Collection<ChargeData> chargeOptions = null;
         final LocalDate dueAsOfDate = null;
+        final Boolean isActive = null;
+        final LocalDate inactivationDate = null;
 
-        return SavingsAccountChargeData.instance(savingsChargeId, this.id, savingsAccountId, this.name, this.currency, this.amount, amountPaid, amountWaived,
-                amountWrittenOff, amountOutstanding, this.chargeTimeType, dueAsOfDate, this.chargeCalculationType, percentage,
-                amountPercentageAppliedTo, chargeOptions, this.penalty, this.feeOnMonthDay, this.feeInterval);
+        return SavingsAccountChargeData.instance(savingsChargeId, this.id, savingsAccountId, this.name, this.currency, this.amount,
+                amountPaid, amountWaived, amountWrittenOff, amountOutstanding, this.chargeTimeType, dueAsOfDate,
+                this.chargeCalculationType, percentage, amountPercentageAppliedTo, chargeOptions, this.penalty, this.feeOnMonthDay,
+                this.feeInterval, isActive, inactivationDate);
+    }
+
+    public boolean isPenalty() {
+        return this.penalty;
+    }
+    
+    public boolean isOverdueInstallmentCharge(){
+        boolean isOverdueInstallmentCharge = false;
+        if(this.chargeTimeType != null){
+            isOverdueInstallmentCharge = ChargeTimeType.fromInt(this.chargeTimeType.getId().intValue()).isOverdueInstallment();
+        }
+        return isOverdueInstallmentCharge;
     }
 }

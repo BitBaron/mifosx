@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class TomcatJdbcDataSourcePerTenantService implements RoutingDataSourceService {
 
-    private final Map<Long, DataSource> tenantToDataSourceMap = new HashMap<Long, DataSource>(1);
+    private final Map<Long, DataSource> tenantToDataSourceMap = new HashMap<>(1);
     private final DataSource tenantDataSource;
 
     @Autowired
@@ -64,6 +64,8 @@ public class TomcatJdbcDataSourcePerTenantService implements RoutingDataSourceSe
         // see
         // http://www.tomcatexpert.com/blog/2010/04/01/configuring-jdbc-pool-high-concurrency
 
+	// see also org.mifosplatform.DataSourceProperties.setMifosDefaults()
+
         final String jdbcUrl = tenant.databaseURL();
 
         final PoolConfiguration poolConfiguration = new PoolProperties();
@@ -73,23 +75,28 @@ public class TomcatJdbcDataSourcePerTenantService implements RoutingDataSourceSe
         poolConfiguration.setUsername(tenant.getSchemaUsername());
         poolConfiguration.setPassword(tenant.getSchemaPassword());
 
-        poolConfiguration.setInitialSize(5);
-        // poolConfiguration.setMaxActive(5);
-        // poolConfiguration.setMinIdle(1);
-        // poolConfiguration.setMaxIdle(4);
+        poolConfiguration.setInitialSize(tenant.getInitialSize());
 
-        // poolConfiguration.setSuspectTimeout(60);
-        // poolConfiguration.setTimeBetweenEvictionRunsMillis(30000);
-        // poolConfiguration.setMinEvictableIdleTimeMillis(60000);
-
-        poolConfiguration.setTestOnBorrow(true);
+        poolConfiguration.setTestOnBorrow(tenant.isTestOnBorrow());
         poolConfiguration.setValidationQuery("SELECT 1");
-        poolConfiguration.setValidationInterval(30000);
+        poolConfiguration.setValidationInterval(tenant.getValidationInterval());
 
-        poolConfiguration.setRemoveAbandoned(true);
-        poolConfiguration.setRemoveAbandonedTimeout(60);
-        poolConfiguration.setLogAbandoned(true);
-        poolConfiguration.setAbandonWhenPercentageFull(50);
+        poolConfiguration.setRemoveAbandoned(tenant.isRemoveAbandoned());
+        poolConfiguration.setRemoveAbandonedTimeout(tenant.getRemoveAbandonedTimeout());
+        poolConfiguration.setLogAbandoned(tenant.isLogAbandoned());
+        poolConfiguration.setAbandonWhenPercentageFull(tenant.getAbandonWhenPercentageFull());
+
+        /**
+         * Vishwas- Do we need to enable the below properties and add
+         * ResetAbandonedTimer for long running batch Jobs?
+         **/
+        // poolConfiguration.setMaxActive(tenant.getMaxActive());
+        // poolConfiguration.setMinIdle(tenant.getMinIdle());
+        // poolConfiguration.setMaxIdle(tenant.getMaxIdle());
+
+        // poolConfiguration.setSuspectTimeout(tenant.getSuspectTimeout());
+        // poolConfiguration.setTimeBetweenEvictionRunsMillis(tenant.getTimeBetweenEvictionRunsMillis());
+        // poolConfiguration.setMinEvictableIdleTimeMillis(tenant.getMinEvictableIdleTimeMillis());
 
         poolConfiguration.setJdbcInterceptors("org.apache.tomcat.jdbc.pool.interceptor.ConnectionState;"
                 + "org.apache.tomcat.jdbc.pool.interceptor.StatementFinalizer;org.apache.tomcat.jdbc.pool.interceptor.SlowQueryReport");

@@ -29,7 +29,7 @@ public enum CalendarType {
         return this.code;
     }
 
-    private static final Map<Integer, CalendarType> intToEnumMap = new HashMap<Integer, CalendarType>();
+    private static final Map<Integer, CalendarType> intToEnumMap = new HashMap<>();
     private static int minValue;
     private static int maxValue;
     static {
@@ -66,8 +66,8 @@ public enum CalendarType {
     public String toString() {
         return name().toString();
     }
-    
-    public boolean isCollection(){
+
+    public boolean isCollection() {
         return this.value.equals(CalendarType.COLLECTION.value);
     }
 }

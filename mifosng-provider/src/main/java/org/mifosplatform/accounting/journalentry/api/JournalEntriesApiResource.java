@@ -24,6 +24,7 @@ import javax.ws.rs.core.UriInfo;
 import org.apache.commons.lang.StringUtils;
 import org.mifosplatform.accounting.journalentry.data.JournalEntryAssociationParametersData;
 import org.mifosplatform.accounting.journalentry.data.JournalEntryData;
+import org.mifosplatform.accounting.journalentry.data.OfficeOpeningBalancesData;
 import org.mifosplatform.accounting.journalentry.service.JournalEntryReadPlatformService;
 import org.mifosplatform.commands.domain.CommandWrapper;
 import org.mifosplatform.commands.service.CommandWrapperBuilder;
@@ -34,8 +35,8 @@ import org.mifosplatform.infrastructure.core.exception.UnrecognizedQueryParamExc
 import org.mifosplatform.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.mifosplatform.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.mifosplatform.infrastructure.core.service.Page;
+import org.mifosplatform.infrastructure.core.service.SearchParameters;
 import org.mifosplatform.infrastructure.security.service.PlatformSecurityContext;
-import org.mifosplatform.portfolio.group.service.SearchParameters;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
@@ -45,15 +46,15 @@ import org.springframework.stereotype.Component;
 @Scope("singleton")
 public class JournalEntriesApiResource {
 
-    private static final Set<String> RESPONSE_DATA_PARAMETERS = new HashSet<String>(Arrays.asList("id", "officeId", "officeName",
+    private static final Set<String> RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList("id", "officeId", "officeName",
             "glAccountName", "glAccountId", "glAccountCode", "glAccountType", "transactionDate", "entryType", "amount", "transactionId",
             "manualEntry", "entityType", "entityId", "createdByUserId", "createdDate", "createdByUserName", "comments", "reversed",
-            "referenceNumber", "currency"));
+            "referenceNumber", "currency", "transactionDetails"));
 
     private final String resourceNameForPermission = "JOURNALENTRY";
 
     private final JournalEntryReadPlatformService journalEntryReadPlatformService;
-    private final DefaultToApiJsonSerializer<JournalEntryData> apiJsonSerializerService;
+    private final DefaultToApiJsonSerializer<Object> apiJsonSerializerService;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final PlatformSecurityContext context;
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
@@ -61,8 +62,7 @@ public class JournalEntriesApiResource {
     @Autowired
     public JournalEntriesApiResource(final PlatformSecurityContext context,
             final JournalEntryReadPlatformService journalEntryReadPlatformService,
-            final DefaultToApiJsonSerializer<JournalEntryData> toApiJsonSerializer,
-            final ApiRequestParameterHelper apiRequestParameterHelper,
+            final DefaultToApiJsonSerializer<Object> toApiJsonSerializer, final ApiRequestParameterHelper apiRequestParameterHelper,
             final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService) {
         this.context = context;
         this.apiRequestParameterHelper = apiRequestParameterHelper;
@@ -77,11 +77,12 @@ public class JournalEntriesApiResource {
     public String retrieveAll(@Context final UriInfo uriInfo, @QueryParam("officeId") final Long officeId,
             @QueryParam("glAccountId") final Long glAccountId, @QueryParam("manualEntriesOnly") final Boolean onlyManualEntries,
             @QueryParam("fromDate") final DateParam fromDateParam, @QueryParam("toDate") final DateParam toDateParam,
-            @QueryParam("transactionId") final String transactionId, @QueryParam("entityType") final Integer entityType, @QueryParam("offset") final Integer offset,
-            @QueryParam("limit") final Integer limit, @QueryParam("orderBy") final String orderBy,
-            @QueryParam("sortOrder") final String sortOrder, @QueryParam("locale") final String locale,
-            @QueryParam("dateFormat") final String dateFormat,@QueryParam("runningBalance") final boolean runningBalance, 
-            @QueryParam("transactionDetails") final boolean transactionDetails) {
+            @QueryParam("transactionId") final String transactionId, @QueryParam("entityType") final Integer entityType,
+            @QueryParam("offset") final Integer offset, @QueryParam("limit") final Integer limit,
+            @QueryParam("orderBy") final String orderBy, @QueryParam("sortOrder") final String sortOrder,
+            @QueryParam("locale") final String locale, @QueryParam("dateFormat") final String dateFormat,
+            @QueryParam("loanId") final Long loanId, @QueryParam("savingsId") final Long savingsId,
+            @QueryParam("runningBalance") final boolean runningBalance, @QueryParam("transactionDetails") final boolean transactionDetails) {
 
         this.context.authenticatedUser().validateHasReadPermission(this.resourceNameForPermission);
 
@@ -94,8 +95,10 @@ public class JournalEntriesApiResource {
             toDate = toDateParam.getDate("toDate", dateFormat, locale);
         }
 
-        final SearchParameters searchParameters = SearchParameters.forJournalEntries(officeId, offset, limit, orderBy, sortOrder);
-        JournalEntryAssociationParametersData associationParametersData = new JournalEntryAssociationParametersData(transactionDetails, runningBalance);
+        final SearchParameters searchParameters = SearchParameters.forJournalEntries(officeId, offset, limit, orderBy, sortOrder, loanId,
+                savingsId);
+        JournalEntryAssociationParametersData associationParametersData = new JournalEntryAssociationParametersData(transactionDetails,
+                runningBalance);
 
         final Page<JournalEntryData> glJournalEntries = this.journalEntryReadPlatformService.retrieveAll(searchParameters, glAccountId,
                 onlyManualEntries, fromDate, toDate, transactionId, entityType, associationParametersData);
@@ -111,8 +114,10 @@ public class JournalEntriesApiResource {
             @QueryParam("runningBalance") final boolean runningBalance, @QueryParam("transactionDetails") final boolean transactionDetails) {
 
         this.context.authenticatedUser().validateHasReadPermission(this.resourceNameForPermission);
-        JournalEntryAssociationParametersData associationParametersData = new JournalEntryAssociationParametersData(transactionDetails, runningBalance);
-        final JournalEntryData glJournalEntryData = this.journalEntryReadPlatformService.retrieveGLJournalEntryById(journalEntryId, associationParametersData);
+        JournalEntryAssociationParametersData associationParametersData = new JournalEntryAssociationParametersData(transactionDetails,
+                runningBalance);
+        final JournalEntryData glJournalEntryData = this.journalEntryReadPlatformService.retrieveGLJournalEntryById(journalEntryId,
+                associationParametersData);
 
         final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
         return this.apiJsonSerializerService.serialize(settings, glJournalEntryData, RESPONSE_DATA_PARAMETERS);
@@ -128,6 +133,10 @@ public class JournalEntriesApiResource {
             final CommandWrapper commandRequest = new CommandWrapperBuilder().updateRunningBalanceForJournalEntry()
                     .withJson(jsonRequestBody).build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+        } else if (is(commandParam, "defineOpeningBalance")) {
+            final CommandWrapper commandRequest = new CommandWrapperBuilder().defineOpeningBalanceForJournalEntry()
+                    .withJson(jsonRequestBody).build();
+            result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         } else {
             final CommandWrapper commandRequest = new CommandWrapperBuilder().createJournalEntry().withJson(jsonRequestBody).build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
@@ -139,17 +148,31 @@ public class JournalEntriesApiResource {
     @Path("{transactionId}")
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
-    public String createReversalJournalEntry(@PathParam("transactionId") final String transactionId,
+    public String createReversalJournalEntry(final String jsonRequestBody, @PathParam("transactionId") final String transactionId,
             @QueryParam("command") final String commandParam) {
         CommandProcessingResult result = null;
         if (is(commandParam, "reverse")) {
-            final CommandWrapper commandRequest = new CommandWrapperBuilder().reverseJournalEntry(transactionId).build();
+            final CommandWrapper commandRequest = new CommandWrapperBuilder().reverseJournalEntry(transactionId).withJson(jsonRequestBody)
+                    .build();
             result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
         } else {
             throw new UnrecognizedQueryParamException("command", commandParam);
         }
 
         return this.apiJsonSerializerService.serialize(result);
+    }
+
+    @GET
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Path("openingbalance")
+    public String retrieveOpeningBalance(@Context final UriInfo uriInfo, @QueryParam("officeId") final Long officeId) {
+
+        this.context.authenticatedUser().validateHasReadPermission(this.resourceNameForPermission);
+        final OfficeOpeningBalancesData officeOpeningBalancesData = this.journalEntryReadPlatformService
+                .retrieveOfficeOpeningBalances(officeId);
+        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+        return this.apiJsonSerializerService.serialize(settings, officeOpeningBalancesData);
     }
 
     private boolean is(final String commandParam, final String commandValue) {

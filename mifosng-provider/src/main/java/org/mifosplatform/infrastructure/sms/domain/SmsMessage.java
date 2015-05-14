@@ -41,7 +41,7 @@ public class SmsMessage extends AbstractPersistable<Long> {
     @Column(name = "status_enum", nullable = false)
     private Integer statusType;
 
-    @Column(name = "mobile_no", nullable = false, length=50)
+    @Column(name = "mobile_no", nullable = false, length = 50)
     private String mobileNo;
 
     @Column(name = "message", nullable = false)
@@ -68,7 +68,7 @@ public class SmsMessage extends AbstractPersistable<Long> {
 
     public Map<String, Object> update(final JsonCommand command) {
 
-        final Map<String, Object> actualChanges = new LinkedHashMap<String, Object>(1);
+        final Map<String, Object> actualChanges = new LinkedHashMap<>(1);
 
         if (command.isChangeInStringParameterNamed(SmsApiConstants.messageParamName, this.message)) {
             final String newValue = command.stringValueOfParameterNamed(SmsApiConstants.messageParamName);

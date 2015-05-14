@@ -52,7 +52,7 @@ public class SavingsProductChargeAssembler {
 
     public Set<SavingsAccountCharge> fromParsedJson(final JsonElement element) {
 
-        final Set<SavingsAccountCharge> savingsAccountCharges = new HashSet<SavingsAccountCharge>();
+        final Set<SavingsAccountCharge> savingsAccountCharges = new HashSet<>();
 
         if (element.isJsonObject()) {
             final JsonObject topLevelJsonElement = element.getAsJsonObject();
@@ -73,9 +73,11 @@ public class SavingsProductChargeAssembler {
                             savingsChargeElement, locale);
                     final LocalDate dueDate = this.fromApiJsonHelper.extractLocalDateNamed(dueAsOfDateParamName, savingsChargeElement,
                             dateFormat, locale);
-                    final MonthDay feeOnMonthDay = this.fromApiJsonHelper.extractMonthDayNamed(feeOnMonthDayParamName, savingsChargeElement);
-                    final Integer feeInterval = this.fromApiJsonHelper.extractIntegerNamed(feeIntervalParamName, savingsChargeElement, locale);
-                    
+                    final MonthDay feeOnMonthDay = this.fromApiJsonHelper
+                            .extractMonthDayNamed(feeOnMonthDayParamName, savingsChargeElement);
+                    final Integer feeInterval = this.fromApiJsonHelper.extractIntegerNamed(feeIntervalParamName, savingsChargeElement,
+                            locale);
+
                     if (id == null) {
                         final Charge chargeDefinition = this.chargeRepository.findOneWithNotFoundDetection(chargeId);
                         final ChargeTimeType chargeTime = null;

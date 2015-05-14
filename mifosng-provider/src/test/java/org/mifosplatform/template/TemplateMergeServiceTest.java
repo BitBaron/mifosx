@@ -1,3 +1,8 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.mifosplatform.template;
 
 import static org.junit.Assert.assertEquals;
@@ -41,7 +46,7 @@ public class TemplateMergeServiceTest {
 
         this.template = new Template(name, text, null, null, null);
 
-        final HashMap<String, Object> scopes = new HashMap<String, Object>();
+        final HashMap<String, Object> scopes = new HashMap<>();
         scopes.put("template", this.template);
 
         String output = "";
@@ -65,7 +70,7 @@ public class TemplateMergeServiceTest {
 
         this.template = new Template("TemplateName", content, null, null, null);
 
-        final HashMap<String, Object> scopes = new HashMap<String, Object>();
+        final HashMap<String, Object> scopes = new HashMap<>();
         scopes.put("installments", installments);
 
         final String output = tms.compile(this.template, scopes);

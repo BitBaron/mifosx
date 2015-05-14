@@ -20,6 +20,7 @@ public class SavingsTransactionDTO {
     private final SavingsAccountTransactionEnumData transactionType;
 
     private final BigDecimal amount;
+    private final BigDecimal overdraftAmount;
 
     /*** Boolean values determines if the transaction is reversed ***/
     private final boolean reversed;
@@ -28,9 +29,12 @@ public class SavingsTransactionDTO {
     private final List<ChargePaymentDTO> penaltyPayments;
     private final List<ChargePaymentDTO> feePayments;
 
+    private final boolean isAccountTransfer;
+
     public SavingsTransactionDTO(final Long officeId, final Long paymentTypeId, final String transactionId, final Date transactionDate,
             final SavingsAccountTransactionEnumData transactionType, final BigDecimal amount, final boolean reversed,
-            final List<ChargePaymentDTO> feePayments, final List<ChargePaymentDTO> penaltyPayments) {
+            final List<ChargePaymentDTO> feePayments, final List<ChargePaymentDTO> penaltyPayments, final BigDecimal overdraftAmount,
+            boolean isAccountTransfer) {
         this.paymentTypeId = paymentTypeId;
         this.transactionId = transactionId;
         this.transactionDate = transactionDate;
@@ -40,6 +44,8 @@ public class SavingsTransactionDTO {
         this.feePayments = feePayments;
         this.penaltyPayments = penaltyPayments;
         this.officeId = officeId;
+        this.overdraftAmount = overdraftAmount;
+        this.isAccountTransfer = isAccountTransfer;
     }
 
     public Long getOfficeId() {
@@ -76,6 +82,18 @@ public class SavingsTransactionDTO {
 
     public List<ChargePaymentDTO> getFeePayments() {
         return this.feePayments;
+    }
+
+    public BigDecimal getOverdraftAmount() {
+        return this.overdraftAmount;
+    }
+
+    public boolean isOverdraftTransaction() {
+        return this.overdraftAmount != null && this.overdraftAmount.doubleValue() > 0;
+    }
+
+    public boolean isAccountTransfer() {
+        return this.isAccountTransfer;
     }
 
 }

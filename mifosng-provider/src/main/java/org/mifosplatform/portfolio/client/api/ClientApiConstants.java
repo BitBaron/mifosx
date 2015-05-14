@@ -15,7 +15,14 @@ public class ClientApiConstants {
 
     public static final String CLIENT_RESOURCE_NAME = "client";
     public static final String CLIENT_CLOSURE_REASON = "ClientClosureReason";
+    public static final String CLIENT_ACTION_REASON = "ClientActionReason";
+    public static final String CLIENT_REJECT_REASON = "ClientRejectReason";
+    public static final String CLIENT_WITHDRAW_REASON = "ClientWithdrawReason";
 
+	
+    public static final String GENDER = "Gender";
+    public static final String CLIENT_TYPE = "ClientType";
+    public static final String CLIENT_CLASSIFICATION = "ClientClassification";
     // general
     public static final String localeParamName = "locale";
     public static final String dateFormatParamName = "dateFormat";
@@ -34,18 +41,39 @@ public class ClientApiConstants {
     public static final String transferOfficeIdParamName = "transferOfficeIdParamName";
     public static final String activeParamName = "active";
     public static final String activationDateParamName = "activationDate";
+    public static final String reactivationDateParamName = "reactivationDate";
     public static final String staffIdParamName = "staffId";
     public static final String closureDateParamName = "closureDate";
     public static final String closureReasonIdParamName = "closureReasonId";
-    public static final String submittedOnDateParamName="submittedOnDate";
+    
+    public static final String rejectionDateParamName = "rejectionDate";
+    public static final String rejectionReasonIdParamName ="rejectionReasonId";
+    public static final String withdrawalDateParamName = "withdrawalDate";
+    public static final String withdrawalReasonIdParamName ="withdrawalReasonId";
+        
+    public static final String submittedOnDateParamName = "submittedOnDate";
+    public static final String savingsProductIdParamName = "savingsProductId";
+    public static final String savingsAccountIdParamName = "savingsAccountId";
+    public static final String dateOfBirthParamName = "dateOfBirth";
+    public static final String genderIdParamName = "genderId";
+    public static final String genderParamName = "gender";
+    public static final String clientTypeIdParamName = "clientTypeId";
+    public static final String clientTypeParamName = "clientType";
+    public static final String clientClassificationIdParamName = "clientClassificationId";
+    public static final String clientClassificationParamName = "clientClassification";
     // response parameters
     public static final String statusParamName = "status";
     public static final String hierarchyParamName = "hierarchy";
     public static final String displayNameParamName = "displayName";
     public static final String officeNameParamName = "officeName";
+    public static final String staffNameParamName = "staffName";
     public static final String trasnferOfficeNameParamName = "transferOfficeName";
+    public static final String transferToOfficeNameParamName = "transferToOfficeName";
+    public static final String transferToOfficeIdParamName = "transferToOfficeId";
     public static final String imageKeyParamName = "imageKey";
+    public static final String imageIdParamName = "imageId";
     public static final String imagePresentParamName = "imagePresent";
+    public static final String timelineParamName = "timeline";
 
     // associations related part of response
     public static final String groupsParamName = "groups";
@@ -54,29 +82,41 @@ public class ClientApiConstants {
     public static final String officeOptionsParamName = "officeOptions";
     public static final String staffOptionsParamName = "staffOptions";
 
-    public static final Set<String> CLIENT_CREATE_REQUEST_DATA_PARAMETERS = new HashSet<String>(Arrays.asList(localeParamName,
+    public static final Set<String> CLIENT_CREATE_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(localeParamName,
             dateFormatParamName, groupIdParamName, accountNoParamName, externalIdParamName, mobileNoParamName, firstnameParamName,
             middlenameParamName, lastnameParamName, fullnameParamName, officeIdParamName, activeParamName, activationDateParamName,
-            staffIdParamName,submittedOnDateParamName));
+            staffIdParamName, submittedOnDateParamName, savingsProductIdParamName, dateOfBirthParamName, genderIdParamName,
+            clientTypeIdParamName, clientClassificationIdParamName));
 
-    public static final Set<String> CLIENT_UPDATE_REQUEST_DATA_PARAMETERS = new HashSet<String>(Arrays.asList(localeParamName,
+    public static final Set<String> CLIENT_UPDATE_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(localeParamName,
             dateFormatParamName, accountNoParamName, externalIdParamName, mobileNoParamName, firstnameParamName, middlenameParamName,
-            lastnameParamName, fullnameParamName, activeParamName, activationDateParamName, staffIdParamName));
+
+            lastnameParamName, fullnameParamName, activeParamName, activationDateParamName, staffIdParamName, savingsProductIdParamName,
+            dateOfBirthParamName, genderIdParamName, clientTypeIdParamName, clientClassificationIdParamName,submittedOnDateParamName));
+
 
     /**
      * These parameters will match the class level parameters of
      * {@link ClientData}. Where possible, we try to get response parameters to
      * match those of request parameters.
      */
-    public static final Set<String> CLIENT_RESPONSE_DATA_PARAMETERS = new HashSet<String>(Arrays.asList(idParamName, accountNoParamName,
-            externalIdParamName, mobileNoParamName, statusParamName, activeParamName, activationDateParamName, firstnameParamName, middlenameParamName,
-            lastnameParamName, fullnameParamName, displayNameParamName, officeIdParamName, officeNameParamName, transferOfficeIdParamName,
-            trasnferOfficeNameParamName, hierarchyParamName, imageKeyParamName, imagePresentParamName, groupsParamName,
-            officeOptionsParamName, staffOptionsParamName));
+    public static final Set<String> CLIENT_RESPONSE_DATA_PARAMETERS = new HashSet<>(Arrays.asList(idParamName, accountNoParamName,
+            externalIdParamName, statusParamName, activeParamName, activationDateParamName, firstnameParamName, middlenameParamName,
+            lastnameParamName, fullnameParamName, displayNameParamName, mobileNoParamName, officeIdParamName, officeNameParamName,
+            transferToOfficeIdParamName, transferToOfficeNameParamName, hierarchyParamName, imageIdParamName, imagePresentParamName,
+            staffIdParamName, staffNameParamName, timelineParamName, groupsParamName, officeOptionsParamName, staffOptionsParamName,
+            dateOfBirthParamName, genderParamName,clientTypeParamName,clientClassificationParamName));
 
-    public static final Set<String> ACTIVATION_REQUEST_DATA_PARAMETERS = new HashSet<String>(Arrays.asList(localeParamName,
+    public static final Set<String> ACTIVATION_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(localeParamName,
             dateFormatParamName, activationDateParamName));
+    public static final Set<String> REACTIVATION_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(localeParamName,
+            dateFormatParamName, reactivationDateParamName));
 
-    public static final Set<String> CLIENT_CLOSE_REQUEST_DATA_PARAMETERS = new HashSet<String>(Arrays.asList(localeParamName,
+    public static final Set<String> CLIENT_CLOSE_REQUEST_DATA_PARAMETERS = new HashSet<>(Arrays.asList(localeParamName,
             dateFormatParamName, closureDateParamName, closureReasonIdParamName));
+	
+    public static final Set<String> CLIENT_REJECT_DATA_PARAMETERS =	new HashSet<>(Arrays.asList(localeParamName,dateFormatParamName,rejectionDateParamName,rejectionReasonIdParamName));
+
+    public static final Set<String> CLIENT_WITHDRAW_DATA_PARAMETERS =	new HashSet<>(Arrays.asList(localeParamName,dateFormatParamName,withdrawalDateParamName,withdrawalReasonIdParamName));
+
 }

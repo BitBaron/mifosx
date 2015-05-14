@@ -15,6 +15,9 @@ import org.mifosplatform.infrastructure.core.api.JsonCommand;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResult;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.mifosplatform.infrastructure.core.exception.PlatformDataIntegrityException;
+import org.mifosplatform.infrastructure.entityaccess.domain.MifosEntityAccessType;
+import org.mifosplatform.infrastructure.entityaccess.domain.MifosEntityType;
+import org.mifosplatform.infrastructure.entityaccess.service.MifosEntityAccessUtil;
 import org.mifosplatform.infrastructure.security.service.PlatformSecurityContext;
 import org.mifosplatform.portfolio.charge.domain.Charge;
 import org.mifosplatform.portfolio.charge.domain.ChargeRepositoryWrapper;
@@ -53,6 +56,7 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
     private final LoanTransactionProcessingStrategyRepository loanTransactionProcessingStrategyRepository;
     private final ChargeRepositoryWrapper chargeRepository;
     private final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService;
+    private final MifosEntityAccessUtil mifosEntityAccessUtil;
 
     @Autowired
     public LoanProductWritePlatformServiceJpaRepositoryImpl(final PlatformSecurityContext context,
@@ -60,7 +64,8 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
             final AprCalculator aprCalculator, final FundRepository fundRepository,
             final LoanTransactionProcessingStrategyRepository loanTransactionProcessingStrategyRepository,
             final ChargeRepositoryWrapper chargeRepository,
-            final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService) {
+            final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService,
+            final MifosEntityAccessUtil mifosEntityAccessUtil) {
         this.context = context;
         this.fromApiJsonDeserializer = fromApiJsonDeserializer;
         this.loanProductRepository = loanProductRepository;
@@ -69,6 +74,7 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
         this.loanTransactionProcessingStrategyRepository = loanTransactionProcessingStrategyRepository;
         this.chargeRepository = chargeRepository;
         this.accountMappingWritePlatformService = accountMappingWritePlatformService;
+        this.mifosEntityAccessUtil = mifosEntityAccessUtil;
     }
 
     @Transactional
@@ -92,12 +98,19 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
 
             final LoanProduct loanproduct = LoanProduct.assembleFromJson(fund, loanTransactionProcessingStrategy, charges, command,
                     this.aprCalculator);
+            loanproduct.updateLoanProductInRelatedClasses();
 
             this.loanProductRepository.save(loanproduct);
 
             // save accounting mappings
             this.accountMappingWritePlatformService.createLoanProductToGLAccountMapping(loanproduct.getId(), command);
-
+            // check if the office specific products are enabled. If yes, then save this savings product against a specific office
+            // i.e. this savings product is specific for this office.
+            mifosEntityAccessUtil.checkConfigurationAndAddProductResrictionsForUserOffice(
+            		MifosEntityAccessType.OFFICE_ACCESS_TO_LOAN_PRODUCTS, 
+            		MifosEntityType.LOAN_PRODUCT, 
+            		loanproduct.getId());
+            
             return new CommandProcessingResultBuilder() //
                     .withCommandId(command.commandId()) //
                     .withEntityId(loanproduct.getId()) //
@@ -188,7 +201,7 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
 
     private List<Charge> assembleListOfProductCharges(final JsonCommand command, final String currencyCode) {
 
-        final List<Charge> charges = new ArrayList<Charge>();
+        final List<Charge> charges = new ArrayList<>();
 
         String loanProductCurrencyCode = command.stringValueOfParameterNamed("currencyCode");
         if (loanProductCurrencyCode == null) {
@@ -237,6 +250,11 @@ public class LoanProductWritePlatformServiceJpaRepositoryImpl implements LoanPro
             final String name = command.stringValueOfParameterNamed("name");
             throw new PlatformDataIntegrityException("error.msg.product.loan.duplicate.name", "Loan product with name `" + name
                     + "` already exists", "name", name);
+        } else if (realCause.getMessage().contains("unq_short_name")) {
+
+            final String shortName = command.stringValueOfParameterNamed("shortName");
+            throw new PlatformDataIntegrityException("error.msg.product.loan.duplicate.short.name", "Loan product with short name `"
+                    + shortName + "` already exists", "shortName", shortName);
         } else if (realCause.getMessage().contains("Duplicate entry")) {
             final Object[] args = null;
             throw new PlatformDataIntegrityException("error.msg.product.loan.duplicate.charge",

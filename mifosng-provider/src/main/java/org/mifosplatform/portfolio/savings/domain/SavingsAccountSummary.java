@@ -50,13 +50,13 @@ public final class SavingsAccountSummary {
     @Column(name = "account_balance_derived", scale = 6, precision = 19)
     private BigDecimal accountBalance = BigDecimal.ZERO;
 
-    //TODO: AA do we need this data to be persisted.
+    // TODO: AA do we need this data to be persisted.
     @Transient
     private BigDecimal totalFeeChargesWaived = BigDecimal.ZERO;
-    
+
     @Transient
     private BigDecimal totalPenaltyChargesWaived = BigDecimal.ZERO;
-    
+
     protected SavingsAccountSummary() {
         //
     }
@@ -84,7 +84,9 @@ public final class SavingsAccountSummary {
         Money totalEarned = Money.zero(currency);
 
         for (final PostingPeriod period : allPostingPeriods) {
-            totalEarned = totalEarned.plus(period.interest());
+            Money interestEarned = period.interest();
+            interestEarned = interestEarned == null ? Money.zero(currency) : interestEarned;
+            totalEarned = totalEarned.plus(interestEarned);
         }
 
         this.totalInterestEarned = totalEarned.getAmount();

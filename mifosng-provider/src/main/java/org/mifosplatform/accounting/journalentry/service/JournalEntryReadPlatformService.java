@@ -9,14 +9,17 @@ import java.util.Date;
 
 import org.mifosplatform.accounting.journalentry.data.JournalEntryAssociationParametersData;
 import org.mifosplatform.accounting.journalentry.data.JournalEntryData;
+import org.mifosplatform.accounting.journalentry.data.OfficeOpeningBalancesData;
 import org.mifosplatform.infrastructure.core.service.Page;
-import org.mifosplatform.portfolio.group.service.SearchParameters;
+import org.mifosplatform.infrastructure.core.service.SearchParameters;
 
 public interface JournalEntryReadPlatformService {
-    
-    JournalEntryData retrieveGLJournalEntryById(long glJournalEntryId, JournalEntryAssociationParametersData  associationParametersData);
+
+    JournalEntryData retrieveGLJournalEntryById(long glJournalEntryId, JournalEntryAssociationParametersData associationParametersData);
 
     Page<JournalEntryData> retrieveAll(SearchParameters searchParameters, Long glAccountId, Boolean onlyManualEntries, Date fromDate,
             Date toDate, String transactionId, Integer entityType, JournalEntryAssociationParametersData associationParametersData);
+
+    OfficeOpeningBalancesData retrieveOfficeOpeningBalances(Long officeId);
 
 }

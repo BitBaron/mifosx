@@ -14,8 +14,11 @@ import org.mifosplatform.accounting.common.AccountingEnumerations;
 import org.mifosplatform.infrastructure.core.data.EnumOptionData;
 import org.mifosplatform.infrastructure.core.domain.JdbcSupport;
 import org.mifosplatform.infrastructure.core.service.RoutingDataSource;
+import org.mifosplatform.infrastructure.entityaccess.domain.MifosEntityType;
+import org.mifosplatform.infrastructure.entityaccess.service.MifosEntityAccessUtil;
 import org.mifosplatform.infrastructure.security.service.PlatformSecurityContext;
 import org.mifosplatform.organisation.monetary.data.CurrencyData;
+import org.mifosplatform.portfolio.savings.DepositAccountType;
 import org.mifosplatform.portfolio.savings.data.SavingsProductData;
 import org.mifosplatform.portfolio.savings.exception.SavingsProductNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,11 +34,14 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
     private final JdbcTemplate jdbcTemplate;
     private final SavingProductMapper savingsProductRowMapper = new SavingProductMapper();
     private final SavingProductLookupMapper savingsProductLookupsRowMapper = new SavingProductLookupMapper();
+    private final MifosEntityAccessUtil mifosEntityAccessUtil;
 
     @Autowired
-    public SavingsProductReadPlatformServiceImpl(final PlatformSecurityContext context, final RoutingDataSource dataSource) {
+    public SavingsProductReadPlatformServiceImpl(final PlatformSecurityContext context, final RoutingDataSource dataSource,
+    		final MifosEntityAccessUtil mifosEntityAccessUtil) {
         this.context = context;
         this.jdbcTemplate = new JdbcTemplate(dataSource);
+        this.mifosEntityAccessUtil = mifosEntityAccessUtil;
     }
 
     @Override
@@ -43,25 +49,44 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
 
         this.context.authenticatedUser();
 
-        final String sql = "select " + this.savingsProductRowMapper.schema();
+        String sql = "select " + this.savingsProductRowMapper.schema() + "where sp.deposit_type_enum = ?";
+        
+		// Check if branch specific products are enabled. If yes, fetch only products mapped to current user's office
+		String inClause = mifosEntityAccessUtil.
+				getSQLWhereClauseForProductIDsForUserOffice_ifGlobalConfigEnabled(
+						MifosEntityType.SAVINGS_PRODUCT);
+		if ( (inClause != null) && (!(inClause.trim().isEmpty())) ) {
+			sql += " and sp.id in ( " + inClause + " ) ";
+		}
 
-        return this.jdbcTemplate.query(sql, this.savingsProductRowMapper);
+        return this.jdbcTemplate.query(sql, this.savingsProductRowMapper, new Object[] { DepositAccountType.SAVINGS_DEPOSIT.getValue() });
     }
 
     @Override
     public Collection<SavingsProductData> retrieveAllForLookup() {
 
-        final String sql = "select " + this.savingsProductLookupsRowMapper.schema();
+        String sql = "select " + this.savingsProductLookupsRowMapper.schema() + " where sp.deposit_type_enum = ? ";
+        
+        // Check if branch specific products are enabled. If yes, fetch only products mapped to current user's office
+ 		String inClause = mifosEntityAccessUtil.
+ 				getSQLWhereClauseForProductIDsForUserOffice_ifGlobalConfigEnabled(
+						MifosEntityType.SAVINGS_PRODUCT);
+    	if ( (inClause != null) && (!(inClause.trim().isEmpty())) ) {
+    		sql += " and id in ( " + inClause + " ) ";
+    	}
+    
 
-        return this.jdbcTemplate.query(sql, this.savingsProductLookupsRowMapper);
+        return this.jdbcTemplate.query(sql, this.savingsProductLookupsRowMapper,
+                new Object[] { DepositAccountType.SAVINGS_DEPOSIT.getValue() });
     }
 
     @Override
     public SavingsProductData retrieveOne(final Long savingProductId) {
         try {
             this.context.authenticatedUser();
-            final String sql = "select " + this.savingsProductRowMapper.schema() + " where sp.id = ?";
-            return this.jdbcTemplate.queryForObject(sql, this.savingsProductRowMapper, new Object[] { savingProductId });
+            final String sql = "select " + this.savingsProductRowMapper.schema() + " where sp.id = ? and sp.deposit_type_enum = ?";
+            return this.jdbcTemplate.queryForObject(sql, this.savingsProductRowMapper, new Object[] { savingProductId,
+                    DepositAccountType.SAVINGS_DEPOSIT.getValue() });
         } catch (final EmptyResultDataAccessException e) {
             throw new SavingsProductNotFoundException(savingProductId);
         }
@@ -73,7 +98,7 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
 
         public SavingProductMapper() {
             final StringBuilder sqlBuilder = new StringBuilder(400);
-            sqlBuilder.append("sp.id as id, sp.name as name, sp.description as description, ");
+            sqlBuilder.append("sp.id as id, sp.name as name, sp.short_name as shortName, sp.description as description, ");
             sqlBuilder
                     .append("sp.currency_code as currencyCode, sp.currency_digits as currencyDigits, sp.currency_multiplesof as inMultiplesOf, ");
             sqlBuilder.append("curr.name as currencyName, curr.internationalized_name_code as currencyNameCode, ");
@@ -86,12 +111,12 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
             sqlBuilder.append("sp.min_required_opening_balance as minRequiredOpeningBalance, ");
             sqlBuilder.append("sp.lockin_period_frequency as lockinPeriodFrequency,");
             sqlBuilder.append("sp.lockin_period_frequency_enum as lockinPeriodFrequencyType, ");
-//            sqlBuilder.append("sp.withdrawal_fee_amount as withdrawalFeeAmount,");
-//            sqlBuilder.append("sp.withdrawal_fee_type_enum as withdrawalFeeTypeEnum, ");
             sqlBuilder.append("sp.withdrawal_fee_for_transfer as withdrawalFeeForTransfers, ");
-//            sqlBuilder.append("sp.annual_fee_amount as annualFeeAmount,");
-//            sqlBuilder.append("sp.annual_fee_on_month as annualFeeOnMonth, ");
-//            sqlBuilder.append("sp.annual_fee_on_day as annualFeeOnDay, ");
+            sqlBuilder.append("sp.allow_overdraft as allowOverdraft, ");
+            sqlBuilder.append("sp.overdraft_limit as overdraftLimit, ");
+            sqlBuilder.append("sp.min_required_balance as minRequiredBalance, ");
+            sqlBuilder.append("sp.enforce_min_required_balance as enforceMinRequiredBalance, ");
+            sqlBuilder.append("sp.min_balance_for_interest_calculation as minBalanceForInterestCalculation,");
             sqlBuilder.append("sp.accounting_type as accountingType ");
             sqlBuilder.append("from m_savings_product sp ");
             sqlBuilder.append("join m_currency curr on curr.code = sp.currency_code ");
@@ -108,6 +133,7 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
 
             final Long id = rs.getLong("id");
             final String name = rs.getString("name");
+            final String shortName = rs.getString("shortName");
             final String description = rs.getString("description");
 
             final String currencyCode = rs.getString("currencyCode");
@@ -149,28 +175,19 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
                 lockinPeriodFrequencyType = SavingsEnumerations.lockinPeriodFrequencyType(lockinPeriodFrequencyTypeValue);
             }
 
-            /*final BigDecimal withdrawalFeeAmount = rs.getBigDecimal("withdrawalFeeAmount");
-
-            EnumOptionData withdrawalFeeType = null;
-            final Integer withdrawalFeeTypeValue = JdbcSupport.getInteger(rs, "withdrawalFeeTypeEnum");
-            if (withdrawalFeeTypeValue != null) {
-                withdrawalFeeType = SavingsEnumerations.withdrawalFeeType(withdrawalFeeTypeValue);
-            }
-*/
             final boolean withdrawalFeeForTransfers = rs.getBoolean("withdrawalFeeForTransfers");
+            final boolean allowOverdraft = rs.getBoolean("allowOverdraft");
+            final BigDecimal overdraftLimit = rs.getBigDecimal("overdraftLimit");
 
-/*            final BigDecimal annualFeeAmount = JdbcSupport.getBigDecimalDefaultToNullIfZero(rs, "annualFeeAmount");
+            final BigDecimal minRequiredBalance = rs.getBigDecimal("minRequiredBalance");
+            final boolean enforceMinRequiredBalance = rs.getBoolean("enforceMinRequiredBalance");
+            final BigDecimal minBalanceForInterestCalculation = rs.getBigDecimal("minBalanceForInterestCalculation");
 
-            MonthDay annualFeeOnMonthDay = null;
-            final Integer annualFeeOnMonth = JdbcSupport.getInteger(rs, "annualFeeOnMonth");
-            final Integer annualFeeOnDay = JdbcSupport.getInteger(rs, "annualFeeOnDay");
-            if (annualFeeAmount != null && annualFeeOnDay != null) {
-                annualFeeOnMonthDay = new MonthDay(annualFeeOnMonth, annualFeeOnDay);
-            }
-*/
-            return SavingsProductData.instance(id, name, description, currency, nominalAnnualInterestRate, compoundingInterestPeriodType,
-                    interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType, minRequiredOpeningBalance,
-                    lockinPeriodFrequency, lockinPeriodFrequencyType, withdrawalFeeForTransfers, accountingRuleType);
+            return SavingsProductData.instance(id, name, shortName, description, currency, nominalAnnualInterestRate,
+                    compoundingInterestPeriodType, interestPostingPeriodType, interestCalculationType, interestCalculationDaysInYearType,
+                    minRequiredOpeningBalance, lockinPeriodFrequency, lockinPeriodFrequencyType, withdrawalFeeForTransfers,
+                    accountingRuleType, allowOverdraft, overdraftLimit, minRequiredBalance, enforceMinRequiredBalance,
+                    minBalanceForInterestCalculation);
         }
     }
 
@@ -188,5 +205,51 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
 
             return SavingsProductData.lookup(id, name);
         }
+    }
+
+    @Override
+    public Collection<SavingsProductData> retrieveAllForLookupByType(Boolean isOverdraftType) {
+        String sql = "select " + this.savingsProductLookupsRowMapper.schema();
+
+        boolean inClauseAdded = false;
+        
+        // Check if branch specific products are enabled. If yes, fetch only products mapped to current user's office
+  		String inClause = mifosEntityAccessUtil.
+  				getSQLWhereClauseForProductIDsForUserOffice_ifGlobalConfigEnabled(
+						MifosEntityType.SAVINGS_PRODUCT);
+    	if ( (inClause != null) && (!(inClause.trim().isEmpty())) ) {
+    		sql += " where id in ( " + inClause + " ) ";
+    		inClauseAdded = true;
+    	}
+        
+        if (isOverdraftType != null) {
+        	if (inClauseAdded) {
+        		sql += " and sp.allow_overdraft=?";
+        	} else {
+        		sql += " where sp.allow_overdraft=?";
+        	}
+            return this.jdbcTemplate.query(sql, this.savingsProductLookupsRowMapper, isOverdraftType);
+        }
+
+        return this.jdbcTemplate.query(sql, this.savingsProductLookupsRowMapper);
+
+    }
+
+    @Override
+    public Collection<SavingsProductData> retrieveAllForCurrency(String currencyCode) {
+
+        this.context.authenticatedUser();
+
+        String sql = "select " + this.savingsProductRowMapper.schema() + " where sp.currency_code='" + currencyCode + "'";
+        
+        // Check if branch specific products are enabled. If yes, fetch only products mapped to current user's office
+  		String inClause = mifosEntityAccessUtil.
+  				getSQLWhereClauseForProductIDsForUserOffice_ifGlobalConfigEnabled(
+						MifosEntityType.SAVINGS_PRODUCT);
+    	if ( (inClause != null) && (!(inClause.trim().isEmpty())) ) {
+    		sql += " and id in ( " + inClause + " ) ";
+    	}
+
+        return this.jdbcTemplate.query(sql, this.savingsProductRowMapper);
     }
 }

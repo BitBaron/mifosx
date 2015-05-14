@@ -5,6 +5,7 @@
  */
 package org.mifosplatform.infrastructure.core.data;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,7 +13,7 @@ import java.util.Map;
  * Represents the successful result of an REST API call that results in
  * processing a command.
  */
-public class CommandProcessingResult {
+public class CommandProcessingResult implements Serializable {
 
     private Long commandId;
     private Long officeId;
@@ -21,17 +22,19 @@ public class CommandProcessingResult {
     private final Long loanId;
     private final Long savingsId;
     private final Long resourceId;
+    private final Long subResourceId;
     private final String transactionId;
     private final Map<String, Object> changes;
     @SuppressWarnings("unused")
     private final String resourceIdentifier;
     private final Long productId;
+    private Boolean rollbackTransaction;
 
     public static CommandProcessingResult fromDetails(final Long commandId, final Long officeId, final Long groupId, final Long clientId,
             final Long loanId, final Long savingsId, final String resourceIdentifier, final Long entityId, final String transactionId,
-            final Map<String, Object> changes, final Long productId) {
+            final Map<String, Object> changes, final Long productId, final Boolean rollbackTransaction, final Long subResourceId) {
         return new CommandProcessingResult(commandId, officeId, groupId, clientId, loanId, savingsId, resourceIdentifier, entityId,
-                transactionId, changes, productId);
+                transactionId, changes, productId, rollbackTransaction, subResourceId);
     }
 
     public static CommandProcessingResult commandOnlyResult(final Long commandId) {
@@ -79,13 +82,14 @@ public class CommandProcessingResult {
         this.loanId = null;
         this.savingsId = null;
         this.transactionId = null;
-        this.changes = new HashMap<String, Object>();
+        this.changes = new HashMap<>();
         this.productId = null;
+        this.subResourceId = null;
     }
 
     private CommandProcessingResult(final Long commandId, final Long officeId, final Long groupId, final Long clientId, final Long loanId,
             final Long savingsId, final String resourceIdentifier, final Long resourceId, final String transactionId,
-            final Map<String, Object> changesOnly, final Long productId) {
+            final Map<String, Object> changesOnly, final Long productId, Boolean rollbackTransaction, final Long subResourceId) {
         this.commandId = commandId;
         this.officeId = officeId;
         this.groupId = groupId;
@@ -97,6 +101,8 @@ public class CommandProcessingResult {
         this.changes = changesOnly;
         this.transactionId = transactionId;
         this.productId = productId;
+        this.rollbackTransaction = rollbackTransaction;
+        this.subResourceId = subResourceId;
     }
 
     private CommandProcessingResult(final Long resourceId, final Long officeId, final Long commandId, final Map<String, Object> changesOnly) {
@@ -115,6 +121,7 @@ public class CommandProcessingResult {
         this.commandId = commandId;
         this.changes = changesOnly;
         this.productId = null;
+        this.subResourceId = null;
     }
 
     public Long commandId() {
@@ -168,5 +175,17 @@ public class CommandProcessingResult {
 
     public Long getProductId() {
         return this.productId;
+    }
+
+    public boolean isRollbackTransaction() {
+        return this.rollbackTransaction != null && this.rollbackTransaction;
+    }
+
+    public void setRollbackTransaction(Boolean rollbackTransaction) {
+        this.rollbackTransaction = rollbackTransaction;
+    }
+
+    public Long getSubResourceId() {
+        return subResourceId;
     }
 }

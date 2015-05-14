@@ -78,8 +78,14 @@ public class MifosStyleLoanRepaymentScheduleTransactionProcessor extends Abstrac
         Money penaltyChargesPortion = Money.zero(transactionAmountRemaining.getCurrency());
 
         if (loanTransaction.isChargesWaiver()) {
-            // zero this type of transaction and ignore it for now.
-            transactionAmountRemaining = Money.zero(currency);
+            penaltyChargesPortion = currentInstallment.waivePenaltyChargesComponent(transactionDate,
+                    loanTransaction.getPenaltyChargesPortion(currency));
+            transactionAmountRemaining = transactionAmountRemaining.minus(penaltyChargesPortion);
+
+            feeChargesPortion = currentInstallment
+                    .waiveFeeChargesComponent(transactionDate, loanTransaction.getFeeChargesPortion(currency));
+            transactionAmountRemaining = transactionAmountRemaining.minus(feeChargesPortion);
+
         } else if (loanTransaction.isInterestWaiver()) {
             interestPortion = currentInstallment.waiveInterestComponent(transactionDate, transactionAmountRemaining);
             transactionAmountRemaining = transactionAmountRemaining.minus(interestPortion);
@@ -116,5 +122,39 @@ public class MifosStyleLoanRepaymentScheduleTransactionProcessor extends Abstrac
     @Override
     protected void onLoanOverpayment(final LoanTransaction loanTransaction, final Money loanOverPaymentAmount) {
         // TODO - KW - dont do anything with loan over-payment for now
+    }
+    
+    @Override
+    protected Money handleRefundTransactionPaymentOfInstallment(final LoanRepaymentScheduleInstallment currentInstallment,
+            final LoanTransaction loanTransaction, final Money transactionAmountUnprocessed) {
+
+        final LocalDate transactionDate = loanTransaction.getTransactionDate();
+        final MonetaryCurrency currency = transactionAmountUnprocessed.getCurrency();
+        Money transactionAmountRemaining = transactionAmountUnprocessed;
+        Money principalPortion = Money.zero(transactionAmountRemaining.getCurrency());
+        Money interestPortion = Money.zero(transactionAmountRemaining.getCurrency());
+        Money feeChargesPortion = Money.zero(transactionAmountRemaining.getCurrency());
+        Money penaltyChargesPortion = Money.zero(transactionAmountRemaining.getCurrency());
+
+        principalPortion = currentInstallment.unpayPrincipalComponent(transactionDate, transactionAmountRemaining);
+        transactionAmountRemaining = transactionAmountRemaining.minus(principalPortion);
+
+        if (transactionAmountRemaining.isGreaterThanZero()) {
+            interestPortion = currentInstallment.unpayInterestComponent(transactionDate, transactionAmountRemaining);
+            transactionAmountRemaining = transactionAmountRemaining.minus(interestPortion);
+        }
+
+        if (transactionAmountRemaining.isGreaterThanZero()) {
+            feeChargesPortion = currentInstallment.unpayFeeChargesComponent(transactionDate, transactionAmountRemaining);
+            transactionAmountRemaining = transactionAmountRemaining.minus(feeChargesPortion);
+        }
+
+        if (transactionAmountRemaining.isGreaterThanZero()) {
+            penaltyChargesPortion = currentInstallment.unpayPenaltyChargesComponent(transactionDate, transactionAmountRemaining);
+            transactionAmountRemaining = transactionAmountRemaining.minus(penaltyChargesPortion);
+        }
+        loanTransaction.updateComponents(principalPortion, interestPortion, feeChargesPortion, penaltyChargesPortion);
+
+        return transactionAmountRemaining;
     }
 }

@@ -10,8 +10,13 @@ import java.util.Map;
 
 public enum CalendarEntityType {
 
-    CLIENTS(1, "calendarEntityType.clients"), GROUPS(2, "calendarEntityType.groups"), LOANS(3, "calendarEntityType.loans"), CENTERS(4,
-            "calendarEntityType.centers");
+    INVALID(0, "calendarEntityType.invalid"), //
+    CLIENTS(1, "calendarEntityType.clients"), //
+    GROUPS(2, "calendarEntityType.groups"), //
+    LOANS(3, "calendarEntityType.loans"), //
+    CENTERS(4, "calendarEntityType.centers"), //
+    SAVINGS(5, "calendarEntityType.savings"), //
+    LOAN_RECALCULATION_DETAIL(6, "calendarEntityType.loan.recalculation.detail");
 
     private final Integer value;
     private final String code;
@@ -29,7 +34,7 @@ public enum CalendarEntityType {
         return this.code;
     }
 
-    private static final Map<Integer, CalendarEntityType> intToEnumMap = new HashMap<Integer, CalendarEntityType>();
+    private static final Map<Integer, CalendarEntityType> intToEnumMap = new HashMap<>();
     private static int minValue;
     private static int maxValue;
     static {
@@ -82,7 +87,7 @@ public enum CalendarEntityType {
     public static boolean isCenter(final String name) {
         return CalendarEntityType.CENTERS.name().equalsIgnoreCase(name) ? true : false;
     }
-    
+
     public static boolean isLoan(final Integer value) {
         return CalendarEntityType.LOANS.value.equals(value) ? true : false;
     }
@@ -90,7 +95,7 @@ public enum CalendarEntityType {
     public static boolean isLoan(final String name) {
         return CalendarEntityType.LOANS.name().equalsIgnoreCase(name) ? true : false;
     }
-    
+
     public static boolean isClient(final Integer value) {
         return CalendarEntityType.CLIENTS.value.equals(value) ? true : false;
     }
@@ -98,20 +103,45 @@ public enum CalendarEntityType {
     public static boolean isClient(final String name) {
         return CalendarEntityType.CLIENTS.name().equalsIgnoreCase(name) ? true : false;
     }
-    
+
     public boolean isCenter() {
         return this.value.equals(CalendarEntityType.CENTERS.getValue());
     }
-    
+
     public boolean isGroup() {
         return this.value.equals(CalendarEntityType.GROUPS.getValue());
     }
-    
+
     public boolean isLoan() {
         return this.value.equals(CalendarEntityType.LOANS.getValue());
     }
-    
+
     public boolean isClient() {
         return this.value.equals(CalendarEntityType.CLIENTS.getValue());
     }
+
+    private static final Map<String, CalendarEntityType> entityNameToEnumMap = new HashMap<>();
+
+    static {
+        for (final CalendarEntityType entityType : CalendarEntityType.values()) {
+            entityNameToEnumMap.put(entityType.name().toLowerCase(), entityType);
+        }
+    }
+
+    public static CalendarEntityType getEntityType(String entityType) {
+        return entityNameToEnumMap.get(entityType.toLowerCase());
+    }
+
+    public static boolean isSavings(final Integer value) {
+        return CalendarEntityType.SAVINGS.value.equals(value) ? true : false;
+    }
+
+    public static boolean isSavings(final String name) {
+        return CalendarEntityType.SAVINGS.name().equalsIgnoreCase(name) ? true : false;
+    }
+
+    public boolean isSavings() {
+        return this.value.equals(CalendarEntityType.SAVINGS.getValue());
+    }
+
 }

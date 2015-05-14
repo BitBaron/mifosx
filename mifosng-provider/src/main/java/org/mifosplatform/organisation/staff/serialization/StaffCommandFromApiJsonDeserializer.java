@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
+import org.joda.time.LocalDate;
 import org.mifosplatform.infrastructure.core.data.ApiParameterError;
 import org.mifosplatform.infrastructure.core.data.DataValidatorBuilder;
 import org.mifosplatform.infrastructure.core.exception.InvalidJsonException;
@@ -32,8 +33,8 @@ public final class StaffCommandFromApiJsonDeserializer {
     /**
      * The parameters supported for this command.
      */
-    private final Set<String> supportedParameters = new HashSet<String>(Arrays.asList("firstname", "lastname", "officeId", "externalId",
-            "mobileNo", "isLoanOfficer"));
+    private final Set<String> supportedParameters = new HashSet<>(Arrays.asList("firstname", "lastname", "officeId", "externalId",
+            "mobileNo", "isLoanOfficer", "isActive", "joiningDate", "dateFormat", "locale"));
 
     private final FromJsonHelper fromApiJsonHelper;
 
@@ -48,7 +49,7 @@ public final class StaffCommandFromApiJsonDeserializer {
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, this.supportedParameters);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("staff");
 
         final JsonElement element = this.fromApiJsonHelper.parse(json);
@@ -73,6 +74,26 @@ public final class StaffCommandFromApiJsonDeserializer {
             baseDataValidator.reset().parameter("isLoanOfficer").value(loanOfficerFlag).notNull();
         }
 
+        if (this.fromApiJsonHelper.parameterExists("isActive", element)) {
+            final Boolean activeFlag = this.fromApiJsonHelper.extractBooleanNamed("isActive", element);
+            baseDataValidator.reset().parameter("isActive").value(activeFlag).notNull();
+        }
+        
+        if (this.fromApiJsonHelper.parameterExists("joiningDate", element)) {
+            final LocalDate joiningDate = this.fromApiJsonHelper.extractLocalDateNamed("joiningDate", element);
+            baseDataValidator.reset().parameter("joiningDate").value(joiningDate).notNull();
+        }
+
+        if (this.fromApiJsonHelper.parameterExists("dateFormat", element)) {
+        	final String dateFormat = this.fromApiJsonHelper.extractStringNamed("dateFormat", element);
+        	baseDataValidator.reset().parameter("dateFormat").value(dateFormat).notBlank();
+        }
+        
+        if (this.fromApiJsonHelper.parameterExists("locale", element)) {
+        	final String locale = this.fromApiJsonHelper.extractStringNamed("locale", element);
+        	baseDataValidator.reset().parameter("locale").value(locale).notBlank();
+        }
+
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -82,7 +103,7 @@ public final class StaffCommandFromApiJsonDeserializer {
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, this.supportedParameters);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("staff");
 
         final JsonElement element = this.fromApiJsonHelper.parse(json);
@@ -109,6 +130,26 @@ public final class StaffCommandFromApiJsonDeserializer {
         if (this.fromApiJsonHelper.parameterExists("isLoanOfficer", element)) {
             final Boolean loanOfficerFlag = this.fromApiJsonHelper.extractBooleanNamed("isLoanOfficer", element);
             baseDataValidator.reset().parameter("isLoanOfficer").value(loanOfficerFlag).notNull();
+        }
+
+        if (this.fromApiJsonHelper.parameterExists("isActive", element)) {
+            final Boolean activeFlag = this.fromApiJsonHelper.extractBooleanNamed("isActive", element);
+            baseDataValidator.reset().parameter("isActive").value(activeFlag).notNull();
+        }
+                
+        if (this.fromApiJsonHelper.parameterExists("joiningDate", element)) {
+            final LocalDate joiningDate = this.fromApiJsonHelper.extractLocalDateNamed("joiningDate", element);
+            baseDataValidator.reset().parameter("joiningDate").value(joiningDate).notNull();
+        }
+
+        if (this.fromApiJsonHelper.parameterExists("dateFormat", element)) {
+        	final String dateFormat = this.fromApiJsonHelper.extractStringNamed("dateFormat", element);
+        	baseDataValidator.reset().parameter("dateFormat").value(dateFormat).notBlank();
+        }
+        
+        if (this.fromApiJsonHelper.parameterExists("locale", element)) {
+        	final String locale = this.fromApiJsonHelper.extractStringNamed("locale", element);
+        	baseDataValidator.reset().parameter("locale").value(locale).notBlank();
         }
 
         throwExceptionIfValidationWarningsExist(dataValidationErrors);

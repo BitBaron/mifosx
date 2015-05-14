@@ -50,7 +50,17 @@ public class AccountingDropdownReadPlatformServiceImpl implements AccountingDrop
 
     @Override
     public Map<String, List<GLAccountData>> retrieveAccountMappingOptionsForLoanProducts() {
-        final Map<String, List<GLAccountData>> accountOptions = new HashMap<String, List<GLAccountData>>();
+        return retrieveAccountMappingOptions();
+    }
+
+    @Override
+    public Map<String, List<GLAccountData>> retrieveAccountMappingOptionsForSavingsProducts() {
+        return retrieveAccountMappingOptions();
+    }
+
+    @Override
+    public Map<String, List<GLAccountData>> retrieveAccountMappingOptions() {
+        final Map<String, List<GLAccountData>> accountOptions = new HashMap<>();
         List<GLAccountData> assetAccountOptions = this.accountReadPlatformService.retrieveAllEnabledDetailGLAccounts(GLAccountType.ASSET);
         if (assetAccountOptions.isEmpty()) {
             assetAccountOptions = null;
@@ -76,18 +86,14 @@ public class AccountingDropdownReadPlatformServiceImpl implements AccountingDrop
             liabilityAccountOptions = null;
         }
         accountOptions.put("liabilityAccountOptions", liabilityAccountOptions);
-        return accountOptions;
-    }
-
-    @Override
-    public Map<String, List<GLAccountData>> retrieveAccountMappingOptionsForSavingsProducts() {
-        final Map<String, List<GLAccountData>> accountOptions = retrieveAccountMappingOptionsForLoanProducts();
-        List<GLAccountData> liabilityAccountOptions = this.accountReadPlatformService
-                .retrieveAllEnabledDetailGLAccounts(GLAccountType.LIABILITY);
-        if (liabilityAccountOptions.isEmpty()) {
-            liabilityAccountOptions = null;
-        }
-        accountOptions.put("liabilityAccountOptions", liabilityAccountOptions);
+        
+		List<GLAccountData> equityAccountOptions = this.accountReadPlatformService
+				.retrieveAllEnabledDetailGLAccounts(GLAccountType.EQUITY);
+		if (equityAccountOptions.isEmpty()) {
+			equityAccountOptions = null;
+		}
+		accountOptions.put("equityAccountOptions",equityAccountOptions);
+        
         return accountOptions;
     }
 

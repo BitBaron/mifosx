@@ -28,4 +28,23 @@ public interface ConfigurationDomainService {
     void updateCache(CacheType cacheType);
 
     Long retrievePenaltyWaitPeriod();
+
+    boolean isPasswordForcedResetEnable();
+
+    Long retrievePasswordLiveTime();
+
+    Long retrieveGraceOnPenaltyPostingPeriod();
+
+    Long retrieveOpeningBalancesContraAccount();
+
+    boolean isSavingsInterestPostingAtCurrentPeriodEnd();
+
+    Integer retrieveFinancialYearBeginningMonth();
+
+    public Integer retrieveMinAllowedClientsInGroup();
+
+    public Integer retrieveMaxAllowedClientsInGroup();
+
+    boolean isMeetingMandatoryForJLGLoans();
+
 }

@@ -5,6 +5,9 @@
  */
 package org.mifosplatform.portfolio.loanaccount.service;
 
+import java.util.Collection;
+import java.util.Map;
+
 import org.joda.time.LocalDate;
 import org.mifosplatform.infrastructure.core.api.JsonCommand;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResult;
@@ -17,18 +20,16 @@ import org.mifosplatform.portfolio.collectionsheet.command.CollectionSheetBulkDi
 import org.mifosplatform.portfolio.collectionsheet.command.CollectionSheetBulkRepaymentCommand;
 import org.mifosplatform.portfolio.loanaccount.domain.LoanTransaction;
 
-import java.util.Collection;
-import java.util.Map;
-
 public interface LoanWritePlatformService {
 
-    CommandProcessingResult disburseLoan(Long loanId, JsonCommand command);
+    CommandProcessingResult disburseLoan(Long loanId, JsonCommand command, Boolean isAccountTransfer);
 
-    Map<String, Object> bulkLoanDisbursal(JsonCommand command, CollectionSheetBulkDisbursalCommand bulkDisbursalCommand);
+    Map<String, Object> bulkLoanDisbursal(JsonCommand command, CollectionSheetBulkDisbursalCommand bulkDisbursalCommand,
+            Boolean isAccountTransfer);
 
     CommandProcessingResult undoLoanDisbursal(Long loanId, JsonCommand command);
 
-    CommandProcessingResult makeLoanRepayment(Long loanId, JsonCommand command);
+    CommandProcessingResult makeLoanRepayment(Long loanId, JsonCommand command, boolean isRecoveryRepayment);
 
     Map<String, Object> makeLoanBulkRepayment(CollectionSheetBulkRepaymentCommand bulkRepaymentCommand);
 
@@ -56,7 +57,8 @@ public interface LoanWritePlatformService {
 
     CommandProcessingResult removeLoanOfficer(Long loanId, JsonCommand command);
 
-    void applyMeetingDateChanges(Calendar calendar, Collection<CalendarInstance> loanCalendarInstances);
+    void applyMeetingDateChanges(Calendar calendar, Collection<CalendarInstance> loanCalendarInstances,
+            Boolean reschedulebasedOnMeetingDates, LocalDate presentMeetingDate, LocalDate newMeetingDate);
 
     void applyHolidaysToLoans();
 
@@ -75,5 +77,17 @@ public interface LoanWritePlatformService {
     void applyChargeForOverdueLoans() throws JobExecutionException;
 
     CommandProcessingResult undoWriteOff(Long loanId);
+
+    CommandProcessingResult updateDisbursementDateAndAmountForTranche(Long loanId, Long disbursementId, JsonCommand command);
+
+    void recalculateInterest();
+
+    CommandProcessingResult recoverFromGuarantor(Long loanId);
+
+    void applyMeetingDateChanges(Calendar calendar, Collection<CalendarInstance> loanCalendarInstances);
+
+    CommandProcessingResult makeLoanRefund(Long loanId, JsonCommand command);
+
+	CommandProcessingResult addAndDeleteLoanDisburseDetails(Long loanId, JsonCommand command);
 
 }

@@ -275,8 +275,60 @@ public final class LoanSummary {
         this.totalOutstanding = totalOutstanding.getAmount();
     }
 
-    
     public BigDecimal getTotalPrincipalDisbursed() {
         return this.totalPrincipalDisbursed;
+    }
+
+    public BigDecimal getTotalPrincipalRepaid() {
+        return this.totalPrincipalRepaid;
+    }
+
+    public BigDecimal getTotalWrittenOff() {
+        return this.totalWrittenOff;
+    }
+    
+    /** 
+     * @return total interest repaid 
+     **/
+    public BigDecimal getTotalInterestRepaid() {
+    	return this.totalInterestRepaid;
+    }
+    
+    public BigDecimal getTotalFeeChargesCharged() {
+    	return this.totalFeeChargesCharged;
+    }
+    
+    public BigDecimal getTotalPenaltyChargesCharged() {
+    	return this.totalPenaltyChargesCharged;
+    }
+
+    
+    public BigDecimal getTotalPrincipalWrittenOff() {
+        return this.totalPrincipalWrittenOff;
+    }
+
+    
+    public BigDecimal getTotalInterestWaived() {
+        return this.totalInterestWaived;
+    }
+
+    
+    public BigDecimal getTotalFeeChargesRepaid() {
+        return this.totalFeeChargesRepaid;
+    }
+
+    
+    public BigDecimal getTotalFeeChargesWaived() {
+        return this.totalFeeChargesWaived;
+    }
+
+    
+    public BigDecimal getTotalPenaltyChargesRepaid() {
+        return this.totalPenaltyChargesRepaid;
+    }
+
+    
+    public BigDecimal getTotalPenaltyChargesWaived() {
+        return this.totalPenaltyChargesWaived;
     }
 }

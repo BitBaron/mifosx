@@ -5,6 +5,11 @@
  */
 package org.mifosplatform.commands.domain;
 
+import org.mifosplatform.infrastructure.accountnumberformat.service.AccountNumberFormatConstants;
+import org.mifosplatform.portfolio.loanaccount.rescheduleloan.RescheduleLoansApiConstants;
+import org.mifosplatform.portfolio.savings.DepositsApiConstants;
+import org.mifosplatform.useradministration.api.PasswordPreferencesApiConstants;
+
 public class CommandWrapper {
 
     private final Long commandId;
@@ -21,11 +26,10 @@ public class CommandWrapper {
     private final Long subentityId;
     private final String href;
     private final String json;
-    private final Long codeId;
     private final String transactionId;
-    private final String supportedEntityType;
-    private final Long supportedEntityId;
     private final Long productId;
+
+    @SuppressWarnings("unused")
     private Long templateId;
 
     public static CommandWrapper wrap(final String actionName, final String entityName, final Long resourceId, final Long subresourceId) {
@@ -35,6 +39,13 @@ public class CommandWrapper {
     public static CommandWrapper fromExistingCommand(final Long commandId, final String actionName, final String entityName,
             final Long resourceId, final Long subresourceId, final String resourceGetUrl, final Long productId) {
         return new CommandWrapper(commandId, actionName, entityName, resourceId, subresourceId, resourceGetUrl, productId);
+    }
+
+    public static CommandWrapper fromExistingCommand(final Long commandId, final String actionName, final String entityName,
+            final Long resourceId, final Long subresourceId, final String resourceGetUrl, final Long productId, final Long officeId,
+            final Long groupId, final Long clientId, final Long loanId, final Long savingsId, final String transactionId) {
+        return new CommandWrapper(commandId, actionName, entityName, resourceId, subresourceId, resourceGetUrl, productId, officeId,
+                groupId, clientId, loanId, savingsId, transactionId);
     }
 
     private CommandWrapper(final Long commandId, final String actionName, final String entityName, final Long resourceId,
@@ -50,9 +61,6 @@ public class CommandWrapper {
         this.taskPermissionName = actionName + "_" + entityName;
         this.entityId = resourceId;
         this.subentityId = subresourceId;
-        this.codeId = null;
-        this.supportedEntityType = null;
-        this.supportedEntityId = null;
         this.href = resourceGetUrl;
         this.json = null;
         this.transactionId = null;
@@ -60,9 +68,9 @@ public class CommandWrapper {
     }
 
     public CommandWrapper(final Long officeId, final Long groupId, final Long clientId, final Long loanId, final Long savingsId,
-            final String actionName, final String entityName, final Long entityId, final Long subentityId, final Long codeId,
-            final String supportedEntityType, final Long supportedEntityId, final String href, final String json,
-            final String transactionId, final Long productId, final Long templateId) {
+            final String actionName, final String entityName, final Long entityId, final Long subentityId, final String href,
+            final String json, final String transactionId, final Long productId, final Long templateId) {
+
         this.commandId = null;
         this.officeId = officeId;
         this.groupId = groupId;
@@ -74,14 +82,32 @@ public class CommandWrapper {
         this.taskPermissionName = actionName + "_" + entityName;
         this.entityId = entityId;
         this.subentityId = subentityId;
-        this.codeId = codeId;
-        this.supportedEntityType = supportedEntityType;
-        this.supportedEntityId = supportedEntityId;
         this.href = href;
         this.json = json;
         this.transactionId = transactionId;
         this.productId = productId;
         this.templateId = templateId;
+    }
+
+    private CommandWrapper(final Long commandId, final String actionName, final String entityName, final Long resourceId,
+            final Long subresourceId, final String resourceGetUrl, final Long productId, final Long officeId, final Long groupId,
+            final Long clientId, final Long loanId, final Long savingsId, final String transactionId) {
+
+        this.commandId = commandId;
+        this.officeId = officeId;
+        this.groupId = groupId;
+        this.clientId = clientId;
+        this.loanId = loanId;
+        this.savingsId = savingsId;
+        this.actionName = actionName;
+        this.entityName = entityName;
+        this.taskPermissionName = actionName + "_" + entityName;
+        this.entityId = resourceId;
+        this.subentityId = subresourceId;
+        this.href = resourceGetUrl;
+        this.json = null;
+        this.transactionId = transactionId;
+        this.productId = productId;
     }
 
     public Long commandId() {
@@ -128,10 +154,6 @@ public class CommandWrapper {
         return this.taskPermissionName;
     }
 
-    public Long getCodeId() {
-        return this.codeId;
-    }
-
     public String getHref() {
         return this.href;
     }
@@ -142,10 +164,6 @@ public class CommandWrapper {
 
     public String getTransactionId() {
         return this.transactionId;
-    }
-
-    public Long getTemplateId() {
-        return this.templateId;
     }
 
     public String getEntityName() {
@@ -176,14 +194,6 @@ public class CommandWrapper {
         return this.savingsId;
     }
 
-    public Long getSupportedEntityId() {
-        return this.supportedEntityId;
-    }
-
-    public String getSupportedEntityType() {
-        return this.supportedEntityType;
-    }
-
     public Long getProductId() {
         return this.productId;
     }
@@ -191,6 +201,7 @@ public class CommandWrapper {
     public boolean isUpdate() {
         // permissions resource has special update which involves no resource.
         return isPermissionResource() && isUpdateOperation() || isCurrencyResource() && isUpdateOperation() || isCacheResource()
+                && isUpdateOperation() || isWorkingDaysResource() && isUpdateOperation() || isPasswordPreferencesResource()
                 && isUpdateOperation() || isUpdateOperation() && this.entityId != null;
     }
 
@@ -226,12 +237,44 @@ public class CommandWrapper {
         return this.entityName.equalsIgnoreCase("USER");
     }
 
+    public boolean isHookResource() {
+        return this.entityName.equalsIgnoreCase("HOOK");
+    }
+
     public boolean isCurrencyResource() {
         return this.entityName.equalsIgnoreCase("CURRENCY");
     }
 
     public boolean isSmsResource() {
         return this.entityName.equalsIgnoreCase("SMS");
+    }
+
+    public boolean isSmsCampaignResource() {
+        return this.entityName.equals("SMS_CAMPAIGN");
+    }
+
+    public boolean isLoanRescheduleResource() {
+        return this.entityName.equals(RescheduleLoansApiConstants.ENTITY_NAME);
+    }
+
+    public boolean isAccountNumberFormatResource() {
+        return this.entityName.equals(AccountNumberFormatConstants.ENTITY_NAME.toUpperCase());
+    }
+
+    public boolean isApprove() {
+        return this.actionName.equalsIgnoreCase("APPROVE");
+    }
+
+    public boolean isReject() {
+        return this.actionName.equalsIgnoreCase("REJECT");
+    }
+
+    public boolean isSmsCampaignActivation() {
+        return this.actionName.equalsIgnoreCase("ACTIVATE") && this.entityName.equalsIgnoreCase("SMS_CAMPAIGN");
+    }
+
+    public boolean isSmsCampaignClosure() {
+        return this.actionName.equalsIgnoreCase("CLOSE") && this.entityName.equalsIgnoreCase("SMS_CAMPAIGN");
     }
 
     public boolean isCodeResource() {
@@ -250,6 +293,10 @@ public class CommandWrapper {
         return this.entityName.equalsIgnoreCase("GUARANTOR");
     }
 
+    public boolean isGuaranteeRecovery() {
+        return this.actionName.equalsIgnoreCase("RECOVERGUARANTEES");
+    }
+
     public boolean isGLAccountResource() {
         return this.entityName.equalsIgnoreCase("GLACCOUNT");
     }
@@ -262,12 +309,28 @@ public class CommandWrapper {
         return this.entityName.equalsIgnoreCase("JOURNALENTRY");
     }
 
+    public boolean isPeriodicAccrualResource() {
+        return this.entityName.equalsIgnoreCase("PERIODICACCRUALACCOUNTING");
+    }
+
+    public boolean isExecute() {
+        return this.actionName.equalsIgnoreCase("EXECUTE");
+    }
+
     public boolean isRevertJournalEntry() {
         return this.actionName.equalsIgnoreCase("REVERSE") && this.entityName.equalsIgnoreCase("JOURNALENTRY");
     }
 
     public boolean isUpdateRunningbalance() {
         return this.actionName.equalsIgnoreCase("UPDATERUNNINGBALANCE") && this.entityName.equalsIgnoreCase("JOURNALENTRY");
+    }
+
+    public boolean isDefineOpeningalance() {
+        return this.actionName.equalsIgnoreCase("DEFINEOPENINGBALANCE") && this.entityName.equalsIgnoreCase("JOURNALENTRY");
+    }
+
+    public boolean isUpdateOpeningbalance() {
+        return this.actionName.equalsIgnoreCase("UPDATEOPENINGBALANCE") && this.entityName.equalsIgnoreCase("JOURNALENTRY");
     }
 
     public boolean isFundResource() {
@@ -314,6 +377,14 @@ public class CommandWrapper {
         return this.actionName.equalsIgnoreCase("CLOSE") && this.entityName.equalsIgnoreCase("CENTER");
     }
 
+    public boolean isCenterAssociateGroups() {
+        return this.actionName.equalsIgnoreCase("ASSOCIATEGROUPS") && this.entityName.equalsIgnoreCase("CENTER");
+    }
+
+    public boolean isCenterDisassociateGroups() {
+        return this.actionName.equalsIgnoreCase("DISASSOCIATEGROUPS") && this.entityName.equalsIgnoreCase("CENTER");
+    }
+
     public boolean isClientIdentifierResource() {
         return this.entityName.equals("CLIENTIDENTIFIER");
     }
@@ -326,8 +397,36 @@ public class CommandWrapper {
         return this.entityName.equalsIgnoreCase("LOAN");
     }
 
+    public boolean isTellerResource() {
+        return this.entityName.equalsIgnoreCase("TELLER");
+    }
+
+    public boolean isAllocateCashier() {
+        return this.actionName.equalsIgnoreCase("ALLOCATECASHIER");
+    }
+
+    public boolean isUpdateCashierAllocation() {
+        return this.actionName.equalsIgnoreCase("UPDATECASHIERALLOCATION");
+    }
+
+    public boolean isDeleteCashierAllocation() {
+        return this.actionName.equalsIgnoreCase("DELETECASHIERALLOCATION");
+    }
+
+    public boolean isAllocateCashToCashier() {
+        return this.actionName.equalsIgnoreCase("ALLOCATECASHTOCASHIER");
+    }
+
+    public boolean isSettleCashFromCashier() {
+        return this.actionName.equalsIgnoreCase("SETTLECASHFROMCASHIER");
+    }
+
     public boolean isLoanChargeResource() {
         return this.entityName.equalsIgnoreCase("LOANCHARGE");
+    }
+
+    public boolean isLoanDisburseDetailResource() {
+        return this.entityName.equalsIgnoreCase("DISBURSEMENTDETAIL");
     }
 
     public boolean isCollateralResource() {
@@ -358,12 +457,20 @@ public class CommandWrapper {
         return this.actionName.equalsIgnoreCase("DISBURSE") && this.entityName.equalsIgnoreCase("LOAN");
     }
 
+    public boolean isDisbursementOfLoanToSavings() {
+        return this.actionName.equalsIgnoreCase("DISBURSETOSAVINGS") && this.entityName.equalsIgnoreCase("LOAN");
+    }
+
     public boolean isUndoDisbursementOfLoan() {
         return this.actionName.equalsIgnoreCase("DISBURSALUNDO") && this.entityName.equalsIgnoreCase("LOAN");
     }
 
     public boolean isLoanRepayment() {
         return this.actionName.equalsIgnoreCase("REPAYMENT") && this.entityName.equalsIgnoreCase("LOAN");
+    }
+
+    public boolean isLoanRecoveryPayment() {
+        return this.actionName.equalsIgnoreCase("RECOVERYPAYMENT") && this.entityName.equalsIgnoreCase("LOAN");
     }
 
     public boolean isLoanRepaymentAdjustment() {
@@ -377,9 +484,23 @@ public class CommandWrapper {
     public boolean isLoanWriteOff() {
         return this.actionName.equalsIgnoreCase("WRITEOFF") && this.entityName.equalsIgnoreCase("LOAN");
     }
-    
+
     public boolean isUndoLoanWriteOff() {
         return this.actionName.equalsIgnoreCase("UNDOWRITEOFF") && this.entityName.equalsIgnoreCase("LOAN");
+    }
+
+    public boolean isUpdateDisbursementDate() {
+        return this.actionName.equalsIgnoreCase("UPDATE") && this.entityName.equalsIgnoreCase("DISBURSEMENTDETAIL")
+                && this.entityId != null;
+    }
+
+    public boolean addAndDeleteDisbursementDetails() {
+        return this.actionName.equalsIgnoreCase("UPDATE") && this.entityName.equalsIgnoreCase("DISBURSEMENTDETAIL")
+                && this.entityId == null;
+    }
+
+    public boolean isStandingInstruction() {
+        return this.entityName.equalsIgnoreCase("STANDINGINSTRUCTION");
     }
 
     public boolean isCloseLoanAsObligationsMet() {
@@ -519,6 +640,14 @@ public class CommandWrapper {
         return this.actionName.equalsIgnoreCase("ADJUSTTRANSACTION") && this.entityName.equalsIgnoreCase("SAVINGSACCOUNT");
     }
 
+    public boolean isUpdateSavingsOfficer() {
+        return this.actionName.equalsIgnoreCase("UPDATESAVINGSOFFICER") && this.entityName.equalsIgnoreCase("SAVINGSACCOUNT");
+    }
+
+    public boolean isRemoveSavingsOfficer() {
+        return this.actionName.equalsIgnoreCase("REMOVESAVINGSOFFICER") && this.entityName.equalsIgnoreCase("SAVINGSACCOUNT");
+    }
+
     public boolean isSavingsAccountChargeResource() {
         return this.entityName.equalsIgnoreCase("SAVINGSACCOUNTCHARGE");
     }
@@ -541,6 +670,14 @@ public class CommandWrapper {
 
     public boolean isPaySavingsAccountCharge() {
         return this.actionName.equalsIgnoreCase("PAY") && this.entityName.equalsIgnoreCase("SAVINGSACCOUNTCHARGE");
+    }
+
+    public boolean isInterestRateChartResource() {
+        return this.entityName.equalsIgnoreCase("INTERESTRATECHART");
+    }
+
+    public boolean isInterestRateChartSlabResource() {
+        return this.entityName.equalsIgnoreCase("CHARTSLAB");
     }
 
     public boolean isCalendarResource() {
@@ -567,6 +704,10 @@ public class CommandWrapper {
 
     public boolean isCollectionSheetResource() {
         return this.entityName.equals("COLLECTIONSHEET");
+    }
+
+    public boolean isSaveIndividualCollectionSheet() {
+        return isCollectionSheetResource() && this.actionName.equalsIgnoreCase("SAVE");
     }
 
     public boolean isCenterResource() {
@@ -596,7 +737,7 @@ public class CommandWrapper {
     public boolean isHolidayResource() {
         return this.entityName.equalsIgnoreCase("HOLIDAY");
     }
-    
+
     public boolean isHolidayActivation() {
         return this.entityName.equalsIgnoreCase("HOLIDAY") && this.actionName.equalsIgnoreCase("ACTIVATE") && this.entityId != null;
     }
@@ -653,6 +794,10 @@ public class CommandWrapper {
         return this.actionName.equalsIgnoreCase("REJECTTRANSFER") && this.entityName.equalsIgnoreCase("CLIENT");
     }
 
+    public boolean isUpdateClientSavingsAccount() {
+        return this.actionName.equalsIgnoreCase("UPDATESAVINGSACCOUNT") && this.entityName.equalsIgnoreCase("CLIENT");
+    }
+
     public boolean isProductMixResource() {
         return this.entityName.equalsIgnoreCase("PRODUCTMIX");
     }
@@ -675,5 +820,215 @@ public class CommandWrapper {
 
     public boolean isCacheResource() {
         return this.entityName.equalsIgnoreCase("CACHE");
+    }
+
+    // Begin - Deposit product
+    public boolean isFixedDepositProductResource() {
+        return this.entityName.equalsIgnoreCase("FIXEDDEPOSITPRODUCT");
+    }
+
+    public boolean isRecurringDepositProductResource() {
+        return this.entityName.equalsIgnoreCase("RECURRINGDEPOSITPRODUCT");
+    }
+
+    // End - Deposit product
+
+    // Begin - Deposit accounts
+    public boolean isDepositAccountResource() {
+        return isFixedDepositAccountResource() || isRecurringDepositAccountResource();
+    }
+
+    public boolean isFixedDepositAccountResource() {
+        return this.entityName.equalsIgnoreCase("FIXEDDEPOSITACCOUNT");
+    }
+
+    public boolean isRecurringDepositAccountResource() {
+        return this.entityName.equalsIgnoreCase("RECURRINGDEPOSITACCOUNT");
+    }
+
+    public boolean isFixedDepositAccountCreate() {
+        return isCreate() && isFixedDepositAccountResource();
+    }
+
+    public boolean isRecurringDepositAccountCreate() {
+        return isCreate() && isRecurringDepositAccountResource();
+    }
+
+    public boolean isFixedDepositAccountUpdate() {
+        return isUpdate() && isFixedDepositAccountResource();
+    }
+
+    public boolean isRecurringDepositAccountUpdate() {
+        return isUpdate() && isRecurringDepositAccountResource();
+    }
+
+    public boolean isFixedDepositAccountDelete() {
+        return isDelete() && isFixedDepositAccountResource();
+    }
+
+    public boolean isRecurringDepositAccountDelete() {
+        return isDelete() && isRecurringDepositAccountResource();
+    }
+
+    public boolean isRejectionOfFixedDepositAccountApplication() {
+        return this.actionName.equalsIgnoreCase("REJECT") && isFixedDepositAccountResource();
+    }
+
+    public boolean isRejectionOfRecurringDepositAccountApplication() {
+        return this.actionName.equalsIgnoreCase("REJECT") && isRecurringDepositAccountResource();
+    }
+
+    public boolean isWithdrawFixedDepositAccountApplicationByApplicant() {
+        return this.actionName.equalsIgnoreCase("WITHDRAW") && isFixedDepositAccountResource();
+    }
+
+    public boolean isWithdrawRecurringDepositAccountApplicationByApplicant() {
+        return this.actionName.equalsIgnoreCase("WITHDRAW") && isRecurringDepositAccountResource();
+    }
+
+    public boolean isApprovalOfFixedDepositAccountApplication() {
+        return this.actionName.equalsIgnoreCase("APPROVE") && isFixedDepositAccountResource();
+    }
+
+    public boolean isApprovalOfRecurringDepositAccountApplication() {
+        return this.actionName.equalsIgnoreCase("APPROVE") && isRecurringDepositAccountResource();
+    }
+
+    public boolean isUndoApprovalOfFixedDepositAccountApplication() {
+        return this.actionName.equalsIgnoreCase("APPROVALUNDO") && isFixedDepositAccountResource();
+    }
+
+    public boolean isUndoApprovalOfRecurringDepositAccountApplication() {
+        return this.actionName.equalsIgnoreCase("APPROVALUNDO") && isRecurringDepositAccountResource();
+    }
+
+    // Account transaction actions
+
+    public boolean isDeposit() {
+        return this.actionName.equalsIgnoreCase("DEPOSIT");
+    }
+
+    public boolean isWithdrawal() {
+        return this.actionName.equalsIgnoreCase("WITHDRAWAL");
+    }
+
+    public boolean isWithdrawn() {
+        return this.actionName.equalsIgnoreCase("WITHDRAW");
+    }
+
+    public boolean isReactivated() {
+        return this.actionName.equalsIgnoreCase("REACTIVATE");
+    }
+
+    public boolean isActivation() {
+        return this.actionName.equalsIgnoreCase("ACTIVATE");
+    }
+
+    public boolean isInterestCalculation() {
+        return this.actionName.equalsIgnoreCase("CALCULATEINTEREST");
+    }
+
+    public boolean isInterestPosting() {
+        return this.actionName.equalsIgnoreCase("POSTINTEREST");
+    }
+
+    public boolean isUndoTransaction() {
+        return this.actionName.equalsIgnoreCase("UNDOTRANSACTION");
+    }
+
+    public boolean isAdjustTransaction() {
+        return this.actionName.equalsIgnoreCase("ADJUSTTRANSACTION");
+    }
+
+    public boolean isDepositAccountClose() {
+        return this.actionName.equalsIgnoreCase("CLOSE") && isDepositAccountResource();
+    }
+
+    public boolean isDepositAccountPrematureClose() {
+        return this.actionName.equalsIgnoreCase("PREMATURECLOSE") && isDepositAccountResource();
+    }
+
+    public boolean isDepositAmountUpdateForRecurringDepositAccount() {
+        return this.actionName.equalsIgnoreCase(DepositsApiConstants.UPDATE_DEPOSIT_AMOUNT.toUpperCase()) && isDepositAccountResource();
+    }
+
+    // End - Deposit accounts
+
+    public boolean isFinancialActivityAccountMapping() {
+        return this.entityName.equalsIgnoreCase("FINANCIALACTIVITYACCOUNT");
+    }
+
+    public boolean isRegisterDatatable() {
+        return this.actionName.equalsIgnoreCase("REGISTER") && this.href.startsWith("/datatables/") && this.entityId == null;
+    }
+
+    public boolean isLikelihoodResource() {
+        return this.entityName.equalsIgnoreCase("Likelihood");
+    }
+
+    public boolean isSurveyResource() {
+
+        return this.href.startsWith("/survey/");
+
+    }
+
+    public boolean isUpdateLikelihood() {
+        return this.actionName.equalsIgnoreCase("UPDATE");
+    }
+
+    public boolean isRegisterSurvey() {
+        return this.actionName.equalsIgnoreCase("REGISTER");
+    }
+
+    public boolean isFullFilSurvey() {
+        return this.actionName.equalsIgnoreCase("CREATE");
+    }
+
+    public boolean isInactivateSavingsAccountCharge() {
+        return this.actionName.equalsIgnoreCase("INACTIVATE") && this.entityName.equalsIgnoreCase("SAVINGSACCOUNTCHARGE");
+    }
+
+    public boolean isRefundByTransfer() {
+        return this.actionName.equalsIgnoreCase("REFUNDBYTRANSFER");
+    }
+
+    public boolean isLoanRefundByCash() {
+        return this.actionName.equalsIgnoreCase("REFUNDBYCASH") && this.entityName.equalsIgnoreCase("LOAN");
+    }
+
+    public boolean isUndoLoanRefund() {
+        return this.actionName.equalsIgnoreCase("UNDOREFUND") && this.entityName.equalsIgnoreCase("LOAN");
+    }
+
+    public boolean isDisable() {
+        return isDisableOperation() && this.entityId != null;
+    }
+
+    public boolean isDisableOperation() {
+        return this.actionName.equalsIgnoreCase("DISABLE");
+    }
+
+    public boolean isEnable() {
+        return isEnableOperation() && this.entityId != null;
+    }
+
+    public boolean isEnableOperation() {
+        return this.actionName.equalsIgnoreCase("ENABLE");
+    }
+
+    public boolean isEntityMappingResource() {
+        return this.entityName.equalsIgnoreCase("ENTITYMAPPING");
+    }
+
+    public boolean isWorkingDaysResource() {
+        return this.entityName.equalsIgnoreCase("WORKINGDAYS");
+    }
+
+    public boolean isPasswordPreferencesResource() {
+        return this.entityName.equalsIgnoreCase(PasswordPreferencesApiConstants.ENTITY_NAME);
+    }
+
+    public boolean isPaymentTypeResource() {
+        return this.entityName.equalsIgnoreCase("PAYMENTTYPE");
     }
 }

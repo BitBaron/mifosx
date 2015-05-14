@@ -1,3 +1,8 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.mifosplatform.organisation.holiday.data;
 
 import java.lang.reflect.Type;
@@ -38,10 +43,11 @@ public class HolidayDataValidator {
         if (StringUtils.isBlank(json)) { throw new InvalidJsonException(); }
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, HolidayApiConstants.HOLIDAY_CREATE_OR_UPDATE_REQUEST_DATA_PARAMETERS);
+        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json,
+                HolidayApiConstants.HOLIDAY_CREATE_OR_UPDATE_REQUEST_DATA_PARAMETERS);
         final JsonElement element = this.fromApiJsonHelper.parse(json);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
 
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
                 .resource(HolidayApiConstants.HOLIDAY_RESOURCE_NAME);
@@ -55,18 +61,19 @@ public class HolidayDataValidator {
         final LocalDate toDate = this.fromApiJsonHelper.extractLocalDateNamed(HolidayApiConstants.toDateParamName, element);
         baseDataValidator.reset().parameter(HolidayApiConstants.toDateParamName).value(toDate).notNull();
 
-        final LocalDate repaymentsRescheduledTo = this.fromApiJsonHelper.extractLocalDateNamed(HolidayApiConstants.repaymentsRescheduledToParamName,
-                element);
+        final LocalDate repaymentsRescheduledTo = this.fromApiJsonHelper.extractLocalDateNamed(
+                HolidayApiConstants.repaymentsRescheduledToParamName, element);
         baseDataValidator.reset().parameter(HolidayApiConstants.repaymentsRescheduledToParamName).value(repaymentsRescheduledTo).notNull();
 
         Set<Long> offices = null;
         final JsonObject topLevelJsonElement = element.getAsJsonObject();
 
-        if (topLevelJsonElement.has(HolidayApiConstants.officesParamName) && topLevelJsonElement.get(HolidayApiConstants.officesParamName).isJsonArray()) {
+        if (topLevelJsonElement.has(HolidayApiConstants.officesParamName)
+                && topLevelJsonElement.get(HolidayApiConstants.officesParamName).isJsonArray()) {
 
             final JsonArray array = topLevelJsonElement.get(HolidayApiConstants.officesParamName).getAsJsonArray();
             if (array.size() > 0) {
-                offices = new HashSet<Long>(array.size());
+                offices = new HashSet<>(array.size());
                 for (int i = 0; i < array.size(); i++) {
                     final JsonObject officeElement = array.get(i).getAsJsonObject();
                     final Long officeId = this.fromApiJsonHelper.extractLongNamed(HolidayApiConstants.officeIdParamName, officeElement);
@@ -78,7 +85,7 @@ public class HolidayDataValidator {
         baseDataValidator.reset().parameter(HolidayApiConstants.officesParamName).value(offices).notNull();
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
-    
+
     public void validateForUpdate(final String json) {
 
         if (StringUtils.isBlank(json)) { throw new InvalidJsonException(); }
@@ -88,7 +95,7 @@ public class HolidayDataValidator {
                 HolidayApiConstants.HOLIDAY_CREATE_OR_UPDATE_REQUEST_DATA_PARAMETERS);
         final JsonElement element = this.fromApiJsonHelper.parse(json);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
 
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
                 .resource(HolidayApiConstants.HOLIDAY_RESOURCE_NAME);
@@ -111,17 +118,19 @@ public class HolidayDataValidator {
         if (this.fromApiJsonHelper.parameterExists(HolidayApiConstants.repaymentsRescheduledToParamName, element)) {
             final LocalDate repaymentsRescheduledTo = this.fromApiJsonHelper.extractLocalDateNamed(
                     HolidayApiConstants.repaymentsRescheduledToParamName, element);
-            baseDataValidator.reset().parameter(HolidayApiConstants.repaymentsRescheduledToParamName).value(repaymentsRescheduledTo).notNull();
+            baseDataValidator.reset().parameter(HolidayApiConstants.repaymentsRescheduledToParamName).value(repaymentsRescheduledTo)
+                    .notNull();
         }
 
         Set<Long> offices = null;
         final JsonObject topLevelJsonElement = element.getAsJsonObject();
         if (this.fromApiJsonHelper.parameterExists(HolidayApiConstants.officesParamName, element)) {
-            if (topLevelJsonElement.has(HolidayApiConstants.officesParamName) && topLevelJsonElement.get(HolidayApiConstants.officesParamName).isJsonArray()) {
+            if (topLevelJsonElement.has(HolidayApiConstants.officesParamName)
+                    && topLevelJsonElement.get(HolidayApiConstants.officesParamName).isJsonArray()) {
 
                 final JsonArray array = topLevelJsonElement.get(HolidayApiConstants.officesParamName).getAsJsonArray();
                 if (array.size() > 0) {
-                    offices = new HashSet<Long>(array.size());
+                    offices = new HashSet<>(array.size());
                     for (int i = 0; i < array.size(); i++) {
                         final JsonObject officeElement = array.get(i).getAsJsonObject();
                         final Long officeId = this.fromApiJsonHelper.extractLongNamed(HolidayApiConstants.officeIdParamName, officeElement);

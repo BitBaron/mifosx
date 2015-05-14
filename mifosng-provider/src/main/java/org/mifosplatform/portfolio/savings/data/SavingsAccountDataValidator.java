@@ -6,6 +6,7 @@
 package org.mifosplatform.portfolio.savings.data;
 
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.accountNoParamName;
+import static org.mifosplatform.portfolio.savings.SavingsApiConstants.allowOverdraftParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.amountParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.chargeIdParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.chargesParamName;
@@ -23,6 +24,7 @@ import static org.mifosplatform.portfolio.savings.SavingsApiConstants.lockinPeri
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.lockinPeriodFrequencyTypeParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.minRequiredOpeningBalanceParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.nominalAnnualInterestRateParamName;
+import static org.mifosplatform.portfolio.savings.SavingsApiConstants.overdraftLimitParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.productIdParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.submittedOnDateParamName;
 import static org.mifosplatform.portfolio.savings.SavingsApiConstants.withdrawalFeeForTransfersParamName;
@@ -30,9 +32,12 @@ import static org.mifosplatform.portfolio.savings.SavingsApiConstants.withdrawal
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.joda.time.LocalDate;
@@ -72,7 +77,7 @@ public class SavingsAccountDataValidator {
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, SavingsApiConstants.SAVINGS_ACCOUNT_REQUEST_DATA_PARAMETERS);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
                 .resource(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
 
@@ -187,7 +192,9 @@ public class SavingsAccountDataValidator {
         }
 
         validateSavingsCharges(element, baseDataValidator);
-        
+
+        validateOverdraftParams(baseDataValidator, element);
+
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -203,21 +210,25 @@ public class SavingsAccountDataValidator {
 
                     final JsonObject savingsChargeElement = array.get(i).getAsJsonObject();
 
-                    //final Long id = this.fromApiJsonHelper.extractLongNamed(idParamName, savingsChargeElement);
+                    // final Long id =
+                    // this.fromApiJsonHelper.extractLongNamed(idParamName,
+                    // savingsChargeElement);
 
                     final Long chargeId = this.fromApiJsonHelper.extractLongNamed(chargeIdParamName, savingsChargeElement);
                     baseDataValidator.reset().parameter(chargeIdParamName).value(chargeId).longGreaterThanZero();
 
                     final BigDecimal amount = this.fromApiJsonHelper.extractBigDecimalNamed(amountParamName, savingsChargeElement, locale);
                     baseDataValidator.reset().parameter(amountParamName).value(amount).notNull().positiveAmount();
-                    
+
                     if (this.fromApiJsonHelper.parameterExists(feeOnMonthDayParamName, savingsChargeElement)) {
-                        final MonthDay monthDay = this.fromApiJsonHelper.extractMonthDayNamed(feeOnMonthDayParamName, savingsChargeElement, monthDayFormat, locale); 
+                        final MonthDay monthDay = this.fromApiJsonHelper.extractMonthDayNamed(feeOnMonthDayParamName, savingsChargeElement,
+                                monthDayFormat, locale);
                         baseDataValidator.reset().parameter(feeOnMonthDayParamName).value(monthDay).notNull();
                     }
-                    
+
                     if (this.fromApiJsonHelper.parameterExists(feeIntervalParamName, savingsChargeElement)) {
-                        final Integer feeInterval = this.fromApiJsonHelper.extractIntegerNamed(feeIntervalParamName, savingsChargeElement, Locale.getDefault());
+                        final Integer feeInterval = this.fromApiJsonHelper.extractIntegerNamed(feeIntervalParamName, savingsChargeElement,
+                                Locale.getDefault());
                         baseDataValidator.reset().parameter(feeIntervalParamName).value(feeInterval).notNull().inMinMaxRange(1, 12);
                     }
                 }
@@ -232,7 +243,7 @@ public class SavingsAccountDataValidator {
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, SavingsApiConstants.SAVINGS_ACCOUNT_REQUEST_DATA_PARAMETERS);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
                 .resource(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
 
@@ -359,10 +370,77 @@ public class SavingsAccountDataValidator {
                     .ignoreIfNull().validateForBooleanValue();
         }
 
+        validateOverdraftParams(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
     private void throwExceptionIfValidationWarningsExist(final List<ApiParameterError> dataValidationErrors) {
         if (!dataValidationErrors.isEmpty()) { throw new PlatformApiDataValidationException(dataValidationErrors); }
     }
+
+    private void validateOverdraftParams(final DataValidatorBuilder baseDataValidator, final JsonElement element) {
+        if (this.fromApiJsonHelper.parameterExists(allowOverdraftParamName, element)) {
+            final Boolean allowOverdraft = this.fromApiJsonHelper.extractBooleanNamed(allowOverdraftParamName, element);
+            baseDataValidator.reset().parameter(allowOverdraftParamName).value(allowOverdraft).ignoreIfNull().validateForBooleanValue();
+        }
+
+        if (this.fromApiJsonHelper.parameterExists(overdraftLimitParamName, element)) {
+            final BigDecimal overdraftLimit = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed(overdraftLimitParamName, element);
+            baseDataValidator.reset().parameter(overdraftLimitParamName).value(overdraftLimit).ignoreIfNull().zeroOrPositiveAmount();
+        }
+
+    }
+
+    public void validateForAssignSavingsOfficer(final String json) {
+
+        if (StringUtils.isBlank(json)) { throw new InvalidJsonException(); }
+        
+        final Set<String> supportedParameters = new HashSet<>(Arrays.asList("fromSavingsOfficerId","toSavingsOfficerId","assignmentDate","locale","dateFormat"));
+
+        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
+        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, supportedParameters);
+
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+
+        final JsonElement element = this.fromApiJsonHelper.parse(json);
+
+        final Long toSavingsOfficerId = this.fromApiJsonHelper.extractLongNamed("toSavingsOfficerId", element);
+        baseDataValidator.reset().parameter("toSavingsOfficerId").value(toSavingsOfficerId).notNull().integerGreaterThanZero();
+
+        final String assignmentDateStr = this.fromApiJsonHelper.extractStringNamed("assignmentDate", element);
+        baseDataValidator.reset().parameter("assignmentDate").value(assignmentDateStr).notBlank();
+
+        if (!StringUtils.isBlank(assignmentDateStr)) {
+            final LocalDate assignmentDate = this.fromApiJsonHelper.extractLocalDateNamed("assignmentDate", element);
+            baseDataValidator.reset().parameter("assignmentDate").value(assignmentDate).notNull();
+        }
+        if (!dataValidationErrors.isEmpty()) { throw new PlatformApiDataValidationException("validation.msg.validation.errors.exist",
+                "Validation errors exist.", dataValidationErrors); }      
+
+    }
+
+    public void validateForUnAssignSavingsOfficer(final String json) {
+    	if (StringUtils.isBlank(json)) { throw new InvalidJsonException(); }
+        
+        final Set<String> supportedParameters = new HashSet<>(Arrays.asList("unassignedDate","locale","dateFormat"));
+
+        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
+        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, supportedParameters);
+
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource(SavingsApiConstants.SAVINGS_ACCOUNT_RESOURCE_NAME);
+
+        final JsonElement element = this.fromApiJsonHelper.parse(json);
+
+        final String unassignedDateStr = this.fromApiJsonHelper.extractStringNamed("unassignedDate", element);
+        baseDataValidator.reset().parameter("unassignedDate").value(unassignedDateStr).notBlank();
+
+        if (!StringUtils.isBlank(unassignedDateStr)) {
+            final LocalDate unassignedDate = this.fromApiJsonHelper.extractLocalDateNamed("unassignedDate", element);
+            baseDataValidator.reset().parameter("unassignedDate").value(unassignedDate).notNull();
+        }
+        if (!dataValidationErrors.isEmpty()) { throw new PlatformApiDataValidationException("validation.msg.validation.errors.exist",
+                "Validation errors exist.", dataValidationErrors); }     
+}
 }

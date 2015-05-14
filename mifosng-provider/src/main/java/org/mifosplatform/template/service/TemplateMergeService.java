@@ -1,3 +1,8 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.mifosplatform.template.service;
 
 import java.io.BufferedReader;
@@ -30,13 +35,18 @@ import com.github.mustachejava.MustacheFactory;
 @Service
 public class TemplateMergeService {
 
-//    private final FromJsonHelper fromApiJsonHelper;
+    // private final FromJsonHelper fromApiJsonHelper;
     private Map<String, Object> scopes;
+    private String authToken;
 
-//    @Autowired
-//    public TemplateMergeService(final FromJsonHelper fromApiJsonHelper) {
-//        this.fromApiJsonHelper = fromApiJsonHelper;
-//    }
+    // @Autowired
+    // public TemplateMergeService(final FromJsonHelper fromApiJsonHelper) {
+    // this.fromApiJsonHelper = fromApiJsonHelper;
+    // }
+
+    public void setAuthToken(final String authToken) {
+        this.authToken = authToken;
+    }
 
     public String compile(final Template template, final Map<String, Object> scopes) throws MalformedURLException, IOException {
 
@@ -88,7 +98,7 @@ public class TemplateMergeService {
         final HttpURLConnection connection = getConnection(url);
 
         final String response = getStringFromInputStream(connection.getInputStream());
-        HashMap<String, Object> result = new HashMap<String, Object>();
+        HashMap<String, Object> result = new HashMap<>();
         if (connection.getContentType().equals("text/plain")) {
             result.put("src", response);
         } else {
@@ -99,20 +109,25 @@ public class TemplateMergeService {
 
     private HttpURLConnection getConnection(final String url) {
 
-        final String name = SecurityContextHolder.getContext().getAuthentication().getName();
-        final String password = SecurityContextHolder.getContext().getAuthentication().getCredentials().toString();
+        if (this.authToken == null) {
+            final String name = SecurityContextHolder.getContext().getAuthentication().getName();
+            final String password = SecurityContextHolder.getContext().getAuthentication().getCredentials().toString();
 
-        Authenticator.setDefault(new Authenticator() {
+            Authenticator.setDefault(new Authenticator() {
 
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(name, password.toCharArray());
-            }
-        });
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(name, password.toCharArray());
+                }
+            });
+        }
 
         HttpURLConnection connection = null;
         try {
             connection = (HttpURLConnection) new URL(url).openConnection();
+            if (this.authToken != null) {
+                connection.setRequestProperty("Authorization", "Basic " + this.authToken);
+            }
             TrustModifier.relaxHostChecking(connection);
 
             connection.setDoInput(true);

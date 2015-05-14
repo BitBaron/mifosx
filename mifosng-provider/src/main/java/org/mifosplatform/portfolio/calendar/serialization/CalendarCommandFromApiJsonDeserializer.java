@@ -86,7 +86,7 @@ public class CalendarCommandFromApiJsonDeserializer extends AbstractFromApiJsonD
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, this.supportedParameters);
         final JsonElement element = this.fromApiJsonHelper.parse(json);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
 
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("calendar");
 
@@ -151,8 +151,8 @@ public class CalendarCommandFromApiJsonDeserializer extends AbstractFromApiJsonD
                 if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue(), element)) {
                     final Integer interval = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(
                             CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue(), element);
-                    baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue()).value(interval)
-                            .notNull().integerGreaterThanZero();
+                    baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue()).value(interval).notNull()
+                            .integerGreaterThanZero();
                 }
                 if (CalendarFrequencyType.fromInt(frequency).isWeekly()) {
                     final Integer repeatsOnDay = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(
@@ -196,9 +196,29 @@ public class CalendarCommandFromApiJsonDeserializer extends AbstractFromApiJsonD
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, this.supportedParameters);
         final JsonElement element = this.fromApiJsonHelper.parse(json);
 
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
 
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("calendar");
+
+        if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.RESCHEDULE_BASED_ON_MEETING_DATES.getValue(), element)) {
+            final Boolean rescheduleBasedOnMeetingDates = this.fromApiJsonHelper.extractBooleanNamed(
+                    CALENDAR_SUPPORTED_PARAMETERS.RESCHEDULE_BASED_ON_MEETING_DATES.getValue(), element);
+            baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.RESCHEDULE_BASED_ON_MEETING_DATES.getValue())
+                    .value(rescheduleBasedOnMeetingDates).validateForBooleanValue();
+        }
+
+        if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.PRESENT_MEETING_DATE.getValue(), element)) {
+            final String presentMeetingDate = this.fromApiJsonHelper.extractStringNamed(
+                    CALENDAR_SUPPORTED_PARAMETERS.PRESENT_MEETING_DATE.getValue(), element);
+            baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.PRESENT_MEETING_DATE.getValue()).value(presentMeetingDate)
+                    .notNull();
+        }
+
+        if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.NEW_MEETING_DATE.getValue(), element)) {
+            final String newMeetingDate = this.fromApiJsonHelper.extractStringNamed(
+                    CALENDAR_SUPPORTED_PARAMETERS.NEW_MEETING_DATE.getValue(), element);
+            baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.NEW_MEETING_DATE.getValue()).value(newMeetingDate).notNull();
+        }
 
         if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.TITLE.getValue(), element)) {
             final String title = this.fromApiJsonHelper.extractStringNamed(CALENDAR_SUPPORTED_PARAMETERS.TITLE.getValue(), element);
@@ -261,8 +281,8 @@ public class CalendarCommandFromApiJsonDeserializer extends AbstractFromApiJsonD
                 if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue(), element)) {
                     final Integer interval = this.fromApiJsonHelper.extractIntegerSansLocaleNamed(
                             CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue(), element);
-                    baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue()).value(interval)
-                            .notNull().integerGreaterThanZero();
+                    baseDataValidator.reset().parameter(CALENDAR_SUPPORTED_PARAMETERS.INTERVAL.getValue()).value(interval).notNull()
+                            .integerGreaterThanZero();
                 }
 
                 if (this.fromApiJsonHelper.parameterExists(CALENDAR_SUPPORTED_PARAMETERS.REPEATS_ON_DAY.getValue(), element)) {
@@ -298,5 +318,5 @@ public class CalendarCommandFromApiJsonDeserializer extends AbstractFromApiJsonD
         if (!dataValidationErrors.isEmpty()) { throw new PlatformApiDataValidationException("validation.msg.validation.errors.exist",
                 "Validation errors exist.", dataValidationErrors); }
     }
-
+        
 }

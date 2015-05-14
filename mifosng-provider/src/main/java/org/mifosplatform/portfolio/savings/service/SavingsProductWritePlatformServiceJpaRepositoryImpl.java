@@ -16,8 +16,12 @@ import org.mifosplatform.infrastructure.core.api.JsonCommand;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResult;
 import org.mifosplatform.infrastructure.core.data.CommandProcessingResultBuilder;
 import org.mifosplatform.infrastructure.core.exception.PlatformDataIntegrityException;
+import org.mifosplatform.infrastructure.entityaccess.domain.MifosEntityAccessType;
+import org.mifosplatform.infrastructure.entityaccess.domain.MifosEntityType;
+import org.mifosplatform.infrastructure.entityaccess.service.MifosEntityAccessUtil;
 import org.mifosplatform.infrastructure.security.service.PlatformSecurityContext;
 import org.mifosplatform.portfolio.charge.domain.Charge;
+import org.mifosplatform.portfolio.savings.DepositAccountType;
 import org.mifosplatform.portfolio.savings.data.SavingsProductDataValidator;
 import org.mifosplatform.portfolio.savings.domain.SavingsProduct;
 import org.mifosplatform.portfolio.savings.domain.SavingsProductAssembler;
@@ -39,18 +43,22 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
     private final SavingsProductDataValidator fromApiJsonDataValidator;
     private final SavingsProductAssembler savingsProductAssembler;
     private final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService;
+    private final MifosEntityAccessUtil mifosEntityAccessUtil;
 
     @Autowired
     public SavingsProductWritePlatformServiceJpaRepositoryImpl(final PlatformSecurityContext context,
             final SavingsProductRepository savingProductRepository, final SavingsProductDataValidator fromApiJsonDataValidator,
             final SavingsProductAssembler savingsProductAssembler,
-            final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService) {
+            final ProductToGLAccountMappingWritePlatformService accountMappingWritePlatformService,
+            final MifosEntityAccessUtil mifosEntityAccessUtil
+            ) {
         this.context = context;
         this.savingProductRepository = savingProductRepository;
         this.fromApiJsonDataValidator = fromApiJsonDataValidator;
         this.savingsProductAssembler = savingsProductAssembler;
         this.logger = LoggerFactory.getLogger(SavingsProductWritePlatformServiceJpaRepositoryImpl.class);
         this.accountMappingWritePlatformService = accountMappingWritePlatformService;
+        this.mifosEntityAccessUtil = mifosEntityAccessUtil;
     }
 
     /*
@@ -65,6 +73,11 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             final String name = command.stringValueOfParameterNamed("name");
             throw new PlatformDataIntegrityException("error.msg.product.savings.duplicate.name", "Savings product with name `" + name
                     + "` already exists", "name", name);
+        } else if (realCause.getMessage().contains("sp_unq_short_name")) {
+
+            final String shortName = command.stringValueOfParameterNamed("shortName");
+            throw new PlatformDataIntegrityException("error.msg.product.savings.duplicate.short.name", "Savings product with short name `"
+                    + shortName + "` already exists", "shortName", shortName);
         }
 
         logAsErrorUnexpectedDataIntegrityException(dae);
@@ -88,7 +101,15 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             this.savingProductRepository.save(product);
 
             // save accounting mappings
-            this.accountMappingWritePlatformService.createSavingProductToGLAccountMapping(product.getId(), command);
+            this.accountMappingWritePlatformService.createSavingProductToGLAccountMapping(product.getId(), command,
+                    DepositAccountType.SAVINGS_DEPOSIT);
+            
+            // check if the office specific products are enabled. If yes, then save this savings product against a specific office
+            // i.e. this savings product is specific for this office.
+            mifosEntityAccessUtil.checkConfigurationAndAddProductResrictionsForUserOffice(
+            		MifosEntityAccessType.OFFICE_ACCESS_TO_SAVINGS_PRODUCTS, 
+            		MifosEntityType.SAVINGS_PRODUCT, 
+            		product.getId());
 
             return new CommandProcessingResultBuilder() //
                     .withEntityId(product.getId()) //
@@ -124,7 +145,8 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             // accounting related changes
             final boolean accountingTypeChanged = changes.containsKey(accountingRuleParamName);
             final Map<String, Object> accountingMappingChanges = this.accountMappingWritePlatformService
-                    .updateSavingsProductToGLAccountMapping(product.getId(), command, accountingTypeChanged, product.getAccountingType());
+                    .updateSavingsProductToGLAccountMapping(product.getId(), command, accountingTypeChanged, product.getAccountingType(),
+                            DepositAccountType.SAVINGS_DEPOSIT);
             changes.putAll(accountingMappingChanges);
 
             if (!changes.isEmpty()) {

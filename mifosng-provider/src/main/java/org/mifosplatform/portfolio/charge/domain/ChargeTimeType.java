@@ -17,8 +17,11 @@ public enum ChargeTimeType {
     WITHDRAWAL_FEE(5, "chargeTimeType.withdrawalFee"), // only for savings
     ANNUAL_FEE(6, "chargeTimeType.annualFee"), // only for savings
     MONTHLY_FEE(7, "chargeTimeType.monthlyFee"), // only for savings
-    INSTALMENT_FEE(8, "chargeTimeType.instalmentFee"),// only for loan charges
-    OVERDUE_INSTALLMENT(9, "chargeTimeType.overdueInstallment"); // only for loan charges
+    INSTALMENT_FEE(8, "chargeTimeType.instalmentFee"), // only for loan charges
+    OVERDUE_INSTALLMENT(9, "chargeTimeType.overdueInstallment"), // only for
+                                                                 // loan charges
+    OVERDRAFT_FEE(10, "chargeTimeType.overdraftFee"),// only for savings
+    WEEKLY_FEE(11, "chargeTimeType.weeklyFee"); // only for savings
 
     private final Integer value;
     private final String code;
@@ -38,13 +41,18 @@ public enum ChargeTimeType {
 
     public static Object[] validLoanValues() {
         return new Integer[] { ChargeTimeType.DISBURSEMENT.getValue(), ChargeTimeType.SPECIFIED_DUE_DATE.getValue(),
-                ChargeTimeType.INSTALMENT_FEE.getValue(),ChargeTimeType.OVERDUE_INSTALLMENT.getValue() };
+                ChargeTimeType.INSTALMENT_FEE.getValue(), ChargeTimeType.OVERDUE_INSTALLMENT.getValue() };
+    }
+    
+    public static Object[] validLoanChargeValues() {
+        return new Integer[] { ChargeTimeType.DISBURSEMENT.getValue(), ChargeTimeType.SPECIFIED_DUE_DATE.getValue(),
+                ChargeTimeType.INSTALMENT_FEE.getValue()};
     }
 
     public static Object[] validSavingsValues() {
         return new Integer[] { ChargeTimeType.SPECIFIED_DUE_DATE.getValue(), ChargeTimeType.SAVINGS_ACTIVATION.getValue(),
                 ChargeTimeType.SAVINGS_CLOSURE.getValue(), ChargeTimeType.WITHDRAWAL_FEE.getValue(), ChargeTimeType.ANNUAL_FEE.getValue(),
-                ChargeTimeType.MONTHLY_FEE.getValue() };
+                ChargeTimeType.MONTHLY_FEE.getValue(), ChargeTimeType.OVERDRAFT_FEE.getValue(), ChargeTimeType.WEEKLY_FEE.getValue() };
     }
 
     public static ChargeTimeType fromInt(final Integer chargeTime) {
@@ -77,6 +85,12 @@ public enum ChargeTimeType {
                 break;
                 case 9:
                     chargeTimeType = OVERDUE_INSTALLMENT;
+                break;
+                case 10:
+                    chargeTimeType = OVERDRAFT_FEE;
+                break;
+                case 11:
+                    chargeTimeType = WEEKLY_FEE;
                 break;
                 default:
                     chargeTimeType = INVALID;
@@ -113,12 +127,16 @@ public enum ChargeTimeType {
     public boolean isMonthlyFee() {
         return this.value.equals(ChargeTimeType.MONTHLY_FEE.getValue());
     }
-
+    
+    public boolean isWeeklyFee() {
+    	return this.value.equals(ChargeTimeType.WEEKLY_FEE.getValue());
+    }
+    
     public boolean isInstalmentFee() {
         return this.value.equals(ChargeTimeType.INSTALMENT_FEE.getValue());
     }
 
-    public boolean isOverdueInstallment(){
+    public boolean isOverdueInstallment() {
         return this.value.equals(ChargeTimeType.OVERDUE_INSTALLMENT.getValue());
     }
 
@@ -128,6 +146,11 @@ public enum ChargeTimeType {
 
     public boolean isAllowedSavingsChargeTime() {
         return isOnSpecifiedDueDate() || isSavingsActivation() || isSavingsClosure() || isWithdrawalFee() || isAnnualFee()
-                || isMonthlyFee();
+                || isMonthlyFee() || isWeeklyFee() || isOverdraftFee();
     }
+
+    public boolean isOverdraftFee() {
+        return this.value.equals(ChargeTimeType.OVERDRAFT_FEE.getValue());
+    }
+
 }

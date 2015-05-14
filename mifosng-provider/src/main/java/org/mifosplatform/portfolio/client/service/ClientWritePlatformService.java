@@ -24,4 +24,12 @@ public interface ClientWritePlatformService {
 
     CommandProcessingResult assignClientStaff(Long clientId, JsonCommand command);
 
+    CommandProcessingResult updateDefaultSavingsAccount(Long clientId, JsonCommand command);
+
+    CommandProcessingResult rejectClient(Long entityId, JsonCommand command);
+
+    CommandProcessingResult withdrawClient(Long entityId, JsonCommand command);
+
+    CommandProcessingResult reActivateClient(Long entityId, JsonCommand command);
+
 }

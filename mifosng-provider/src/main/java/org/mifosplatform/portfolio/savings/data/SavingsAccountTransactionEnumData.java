@@ -11,7 +11,6 @@ import org.mifosplatform.portfolio.savings.SavingsAccountTransactionType;
  * Immutable data object represent savings account transaction type
  * enumerations.
  */
-@SuppressWarnings("unused")
 public class SavingsAccountTransactionEnumData {
 
     private final Long id;
@@ -26,6 +25,9 @@ public class SavingsAccountTransactionEnumData {
     private final boolean approveTransfer;
     private final boolean withdrawTransfer;
     private final boolean rejectTransfer;
+    private final boolean overdraftInterest;
+    private final boolean writtenoff;
+    private final boolean overdraftFee = true;
 
     public SavingsAccountTransactionEnumData(final Long id, final String code, final String value) {
         this.id = id;
@@ -41,6 +43,22 @@ public class SavingsAccountTransactionEnumData {
         this.approveTransfer = Long.valueOf(SavingsAccountTransactionType.APPROVE_TRANSFER.getValue()).equals(this.id);
         this.withdrawTransfer = Long.valueOf(SavingsAccountTransactionType.WITHDRAW_TRANSFER.getValue()).equals(this.id);
         this.rejectTransfer = Long.valueOf(SavingsAccountTransactionType.REJECT_TRANSFER.getValue()).equals(this.id);
+        this.writtenoff = Long.valueOf(SavingsAccountTransactionType.WRITTEN_OFF.getValue()).equals(this.id);
+        this.overdraftInterest = Long.valueOf(SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue()).equals(this.id);
+        // this.overdraftFee =
+        // Long.valueOf(SavingsAccountTransactionType.OVERDRAFT_INTEREST.getValue()).equals(this.id);
+    }
+
+    public Long getId() {
+        return this.id;
+    }
+
+    public String getCode() {
+        return this.code;
+    }
+
+    public String getValue() {
+        return this.value;
     }
 
     public boolean isDeposit() {
@@ -77,6 +95,18 @@ public class SavingsAccountTransactionEnumData {
 
     public boolean isRejectTransfer() {
         return this.rejectTransfer;
+    }
+
+    public boolean isOverdraftInterest() {
+        return this.overdraftInterest;
+    }
+
+    public boolean isWrittenoff() {
+        return this.writtenoff;
+    }
+
+    public boolean isOverdraftFee() {
+        return this.overdraftFee;
     }
 
 }

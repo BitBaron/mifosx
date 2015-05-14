@@ -40,6 +40,10 @@ import org.mifosplatform.portfolio.charge.domain.ChargeTimeType;
 import org.mifosplatform.portfolio.charge.exception.SavingsAccountChargeWithoutMandatoryFieldException;
 import org.springframework.data.jpa.domain.AbstractPersistable;
 
+/**
+ * @author dv6
+ * 
+ */
 @Entity
 @Table(name = "m_savings_account_charge")
 public class SavingsAccountCharge extends AbstractPersistable<Long> {
@@ -105,16 +109,26 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
     @Column(name = "is_active", nullable = false)
     private boolean status = true;
 
+    @Temporal(TemporalType.DATE)
+    @Column(name = "inactivated_on_date")
+    private Date inactivationDate;
+
     public static SavingsAccountCharge createNewFromJson(final SavingsAccount savingsAccount, final Charge chargeDefinition,
             final JsonCommand command) {
 
-        final BigDecimal amount = command.bigDecimalValueOfParameterNamed(amountParamName);
+        BigDecimal amount = command.bigDecimalValueOfParameterNamed(amountParamName);
         final LocalDate dueDate = command.localDateValueOfParameterNamed(dueAsOfDateParamName);
-        final MonthDay feeOnMonthDay = command.extractMonthDayNamed(feeOnMonthDayParamName);
-        final Integer feeInterval = command.integerValueOfParameterNamed(feeIntervalParamName);
+        MonthDay feeOnMonthDay = command.extractMonthDayNamed(feeOnMonthDayParamName);
+        Integer feeInterval = command.integerValueOfParameterNamed(feeIntervalParamName);
         final ChargeTimeType chargeTime = null;
         final ChargeCalculationType chargeCalculation = null;
         final boolean status = true;
+
+        // If these values is not sent as parameter, then derive from Charge
+        // definition
+        amount = (amount == null) ? chargeDefinition.getAmount() : amount;
+        feeOnMonthDay = (feeOnMonthDay == null) ? chargeDefinition.getFeeOnMonthDay() : feeOnMonthDay;
+        feeInterval = (feeInterval == null) ? chargeDefinition.getFeeInterval() : feeInterval;
 
         return new SavingsAccountCharge(savingsAccount, chargeDefinition, amount, chargeTime, chargeCalculation, dueDate, status,
                 feeOnMonthDay, feeInterval);
@@ -160,14 +174,25 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
             this.feeOnMonth = feeOnMonthDay.getMonthOfYear();
             this.feeOnDay = feeOnMonthDay.getDayOfMonth();
 
-            if (isMonthlyFee()) {
-                this.feeInterval = (feeInterval == null) ? chargeDefinition.feeInterval() : feeInterval;
+        } else if (isWeeklyFee()) {
+            if (dueDate == null) {
+                final String defaultUserMessage = "Savings Account charge is missing due date.";
+                throw new SavingsAccountChargeWithoutMandatoryFieldException("savingsaccount.charge", dueAsOfDateParamName,
+                        defaultUserMessage, chargeDefinition.getId(), chargeDefinition.getName());
             }
-
+            /**
+             * For Weekly fee feeOnDay is ISO standard day of the week.
+             * Monday=1, Tuesday=2
+             */
+            this.feeOnDay = dueDate.getDayOfWeek();
         } else {
             this.feeOnDay = null;
             this.feeOnMonth = null;
             this.feeInterval = null;
+        }
+
+        if (isMonthlyFee() || isWeeklyFee()) {
+            this.feeInterval = (feeInterval == null) ? chargeDefinition.feeInterval() : feeInterval;
         }
 
         this.dueDate = (dueDate == null) ? null : dueDate.toDate();
@@ -185,22 +210,23 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
         final BigDecimal transactionAmount = new BigDecimal(0);
 
         populateDerivedFields(transactionAmount, chargeAmount);
-        
+
         if (this.isWithdrawalFee()) {
             this.amountOutstanding = BigDecimal.ZERO;
         }
-        
+
         this.paid = determineIfFullyPaid();
         this.status = status;
     }
 
-    public void recalculateAmountOutstanding() {
-        if (isMonthlyFee() || isAnnualFee()) {
+    public void resetPropertiesForRecurringFees() {
+        if (isMonthlyFee() || isAnnualFee() || isWeeklyFee()) {
             // FIXME: AA: If charge is percentage of x amount then need to
             // update amount outstanding accordingly.
-            // Right now annual and monthly charges supports charge calculation type flat.
+            // Right now annual and monthly charges supports charge calculation
+            // type flat.
             this.amountOutstanding = this.amount;
-            this.paid = false;//reset to false for recurring fee.
+            this.paid = false;// reset to false for recurring fee.
             this.waived = false;
         }
     }
@@ -276,25 +302,28 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
         amountPaid = amountPaid.minus(transactionAmount);
         this.amountPaid = amountPaid.getAmount();
         this.amountOutstanding = calculateAmountOutstanding(currency);
-        
+
         if (this.isWithdrawalFee()) {
             this.amountOutstanding = BigDecimal.ZERO;
         }
-        //to reset amount outstanding for annual and monthly fee
-        recalculateAmountOutstanding();
-        updateToPreviousDueDate();//reset annual and monthly due date.        
+        // to reset amount outstanding for annual and monthly fee
+        resetPropertiesForRecurringFees();
+        updateToPreviousDueDate();// reset annual and monthly due date.
         this.paid = false;
+        this.status = true;
     }
 
     public Money waive(final MonetaryCurrency currency) {
-        this.amountWaived = this.amountOutstanding;
+        Money amountWaivedToDate = Money.of(currency, this.amountWaived);
+        Money amountOutstanding = Money.of(currency, this.amountOutstanding);
+        this.amountWaived = amountWaivedToDate.plus(amountOutstanding).getAmount();
         this.amountOutstanding = BigDecimal.ZERO;
         this.waived = true;
-        
-        recalculateAmountOutstanding();
-        updateToNextDueDate();
-        
-        return getAmountWaived(currency);
+
+        resetPropertiesForRecurringFees();
+        updateNextDueDateForRecurringFees();
+
+        return amountOutstanding;
     }
 
     public void undoWaiver(final MonetaryCurrency currency, final Money transactionAmount) {
@@ -303,8 +332,9 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
         this.amountWaived = amountWaived.getAmount();
         this.amountOutstanding = calculateAmountOutstanding(currency);
         this.waived = false;
-        
-        recalculateAmountOutstanding();
+        this.status = true;
+
+        resetPropertiesForRecurringFees();
         updateToPreviousDueDate();
     }
 
@@ -316,13 +346,13 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
         this.amountPaid = amountPaidToDate.getAmount();
         this.amountOutstanding = amountOutstanding.getAmount();
         this.paid = determineIfFullyPaid();
-        
+
         if (BigDecimal.ZERO.compareTo(this.amountOutstanding) == 0) {
-            //full outstanding is paid, update to next due date
-            updateToNextDueDate();
-            recalculateAmountOutstanding();
+            // full outstanding is paid, update to next due date
+            updateNextDueDateForRecurringFees();
+            resetPropertiesForRecurringFees();
         }
-        
+
         return Money.of(currency, this.amountOutstanding);
     }
 
@@ -338,6 +368,9 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
         final BigDecimal transactionAmount = BigDecimal.ZERO;
         if (dueDate != null) {
             this.dueDate = dueDate.toDate();
+            if (isWeeklyFee()) {
+                this.feeOnDay = dueDate.getDayOfWeek();
+            }
         }
 
         if (feeOnMonthDay != null) {
@@ -380,7 +413,7 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
 
     public Map<String, Object> update(final JsonCommand command) {
 
-        final Map<String, Object> actualChanges = new LinkedHashMap<String, Object>(7);
+        final Map<String, Object> actualChanges = new LinkedHashMap<>(7);
 
         final String dateFormatAsInput = command.dateFormat();
         final String localeAsInput = command.locale();
@@ -393,6 +426,9 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
 
             final LocalDate newValue = command.localDateValueOfParameterNamed(dueAsOfDateParamName);
             this.dueDate = newValue.toDate();
+            if (this.isWeeklyFee()) {
+                this.feeOnDay = newValue.getDayOfWeek();
+            }
         }
 
         if (command.hasParameter(feeOnMonthDayParamName)) {
@@ -615,12 +651,20 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
         return ChargeTimeType.fromInt(this.chargeTime).isWithdrawalFee();
     }
 
+    public boolean isOverdraftFee() {
+        return ChargeTimeType.fromInt(this.chargeTime).isOverdraftFee();
+    }
+
     public boolean isAnnualFee() {
         return ChargeTimeType.fromInt(this.chargeTime).isAnnualFee();
     }
 
     public boolean isMonthlyFee() {
         return ChargeTimeType.fromInt(this.chargeTime).isMonthlyFee();
+    }
+
+    public boolean isWeeklyFee() {
+        return ChargeTimeType.fromInt(this.chargeTime).isWeeklyFee();
     }
 
     public boolean hasCurrencyCodeOf(final String matchingCurrencyCode) {
@@ -663,55 +707,81 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
     }
 
     public void updateToNextDueDateFrom(final LocalDate startingDate) {
-        if (isAnnualFee() || isMonthlyFee()) {
-            LocalDate nextDueLocalDate = startingDate.withMonthOfYear(this.feeOnMonth);
-            int maxDayOfMonth = nextDueLocalDate.dayOfMonth().withMaximumValue().getDayOfMonth();
-            int newDayOfMonth = (this.feeOnDay.intValue() <= maxDayOfMonth) ? this.feeOnDay.intValue() : maxDayOfMonth;
-            nextDueLocalDate = nextDueLocalDate.withDayOfMonth(newDayOfMonth);
-
-            while (startingDate.isAfter(nextDueLocalDate)) {
-                if (isAnnualFee()) {
-                    nextDueLocalDate = nextDueLocalDate.plusYears(1);
-                } else if (isMonthlyFee()) {
-                    nextDueLocalDate = nextDueLocalDate.plusMonths(this.feeInterval);
-                }
-            }
-
-            this.dueDate = nextDueLocalDate.toDate();
+        if (isAnnualFee() || isMonthlyFee() || isWeeklyFee()) {
+            this.dueDate = getNextDueDateFrom(startingDate).toDate();
         }
     }
 
-    public void updateToNextDueDate() {
-        if(isAnnualFee() || isMonthlyFee()){
-            LocalDate nextDueLocalDate = new LocalDate(dueDate);
-            int maxDayOfMonth = nextDueLocalDate.dayOfMonth().withMaximumValue().getDayOfMonth();
-            int newDayOfMonth = (this.feeOnDay.intValue() < maxDayOfMonth) ? this.feeOnDay.intValue() : maxDayOfMonth;
-            nextDueLocalDate = nextDueLocalDate.withDayOfMonth(newDayOfMonth);
-
-            if(isAnnualFee()){
-                nextDueLocalDate = nextDueLocalDate.withMonthOfYear(this.feeOnMonth).plusYears(1);
-            }else if(isMonthlyFee()){
-                nextDueLocalDate = nextDueLocalDate.plusMonths(this.feeInterval);
+    public LocalDate getNextDueDateFrom(final LocalDate startingDate) {
+        LocalDate nextDueLocalDate = null;
+        if (isAnnualFee() || isMonthlyFee()) {
+            nextDueLocalDate = startingDate.withMonthOfYear(this.feeOnMonth);
+            nextDueLocalDate = setDayOfMonth(nextDueLocalDate);
+            while (startingDate.isAfter(nextDueLocalDate)) {
+                nextDueLocalDate = calculateNextDueDate(nextDueLocalDate);
             }
+        } else if (isWeeklyFee()) {
+            nextDueLocalDate = getDueLocalDate();
+            while (startingDate.isAfter(nextDueLocalDate)) {
+                nextDueLocalDate = calculateNextDueDate(nextDueLocalDate);
+            }
+        } else {
+            nextDueLocalDate = calculateNextDueDate(startingDate);
+        }
+        return nextDueLocalDate;
+    }
 
+    private LocalDate calculateNextDueDate(final LocalDate date) {
+        LocalDate nextDueLocalDate = null;
+        if (isAnnualFee()) {
+            nextDueLocalDate = date.withMonthOfYear(this.feeOnMonth).plusYears(1);
+            nextDueLocalDate = setDayOfMonth(nextDueLocalDate);
+        } else if (isMonthlyFee()) {
+            nextDueLocalDate = date.plusMonths(this.feeInterval);
+            nextDueLocalDate = setDayOfMonth(nextDueLocalDate);
+        } else if (isWeeklyFee()) {
+            nextDueLocalDate = date.plusWeeks(this.feeInterval);
+            nextDueLocalDate = setDayOfWeek(nextDueLocalDate);
+        }
+        return nextDueLocalDate;
+    }
+
+    private LocalDate setDayOfMonth(LocalDate nextDueLocalDate) {
+        int maxDayOfMonth = nextDueLocalDate.dayOfMonth().withMaximumValue().getDayOfMonth();
+        int newDayOfMonth = (this.feeOnDay.intValue() < maxDayOfMonth) ? this.feeOnDay.intValue() : maxDayOfMonth;
+        nextDueLocalDate = nextDueLocalDate.withDayOfMonth(newDayOfMonth);
+        return nextDueLocalDate;
+    }
+
+    private LocalDate setDayOfWeek(LocalDate nextDueLocalDate) {
+        if (this.feeOnDay != nextDueLocalDate.getDayOfWeek()) {
+            nextDueLocalDate = nextDueLocalDate.withDayOfWeek(this.feeOnDay);
+        }
+        return nextDueLocalDate;
+    }
+
+    public void updateNextDueDateForRecurringFees() {
+        if (isAnnualFee() || isMonthlyFee() || isWeeklyFee()) {
+            LocalDate nextDueLocalDate = new LocalDate(dueDate);
+            nextDueLocalDate = calculateNextDueDate(nextDueLocalDate);
             this.dueDate = nextDueLocalDate.toDate();
         }
     }
 
     public void updateToPreviousDueDate() {
-        if(isAnnualFee() || isMonthlyFee()){
+        if (isAnnualFee() || isMonthlyFee() || isWeeklyFee()) {
             LocalDate nextDueLocalDate = new LocalDate(dueDate);
-            if(isAnnualFee()){
+            if (isAnnualFee()) {
                 nextDueLocalDate = nextDueLocalDate.withMonthOfYear(this.feeOnMonth).minusYears(1);
-            }else if(isMonthlyFee()){
+                nextDueLocalDate = setDayOfMonth(nextDueLocalDate);
+            } else if (isMonthlyFee()) {
                 nextDueLocalDate = nextDueLocalDate.minusMonths(this.feeInterval);
+                nextDueLocalDate = setDayOfMonth(nextDueLocalDate);
+            } else if (isWeeklyFee()) {
+                nextDueLocalDate = nextDueLocalDate.minusDays(7 * this.feeInterval);
+                nextDueLocalDate = setDayOfWeek(nextDueLocalDate);
             }
-            
-          //set day of month
-            int maxDayOfMonth = nextDueLocalDate.dayOfMonth().withMaximumValue().getDayOfMonth();
-            int newDayOfMonth = (this.feeOnDay.intValue() < maxDayOfMonth) ? this.feeOnDay.intValue() : maxDayOfMonth;
-            nextDueLocalDate = nextDueLocalDate.withDayOfMonth(newDayOfMonth);
-            
+
             this.dueDate = nextDueLocalDate.toDate();
         }
     }
@@ -722,5 +792,49 @@ public class SavingsAccountCharge extends AbstractPersistable<Long> {
 
     public boolean feeSettingsSet() {
         return this.feeOnDay != null && this.feeOnMonth != null;
+    }
+
+    public boolean isRecurringFee() {
+        return isWeeklyFee() || isMonthlyFee() || isAnnualFee();
+    }
+
+    public boolean isChargeIsDue(final LocalDate nextDueDate) {
+        return this.getDueLocalDate().isBefore(nextDueDate);
+    }
+
+    public boolean isChargeIsOverPaid(final LocalDate nextDueDate) {
+        final BigDecimal amountPaid = this.amountPaid == null ? BigDecimal.ZERO : amountPaid();
+        return this.getDueLocalDate().isAfter(nextDueDate) && amountPaid.compareTo(BigDecimal.ZERO) == 1;
+    }
+
+    private BigDecimal amountPaid() {
+        return this.amountPaid;
+    }
+
+    public void inactiavateCharge(final LocalDate inactivationOnDate) {
+        this.inactivationDate = inactivationOnDate.toDate();
+        this.status = false;
+        this.amountOutstanding = BigDecimal.ZERO;
+        this.paid = true;
+    }
+
+    public boolean isActive() {
+        return this.status;
+    }
+
+    public boolean isNotActive() {
+        return !isActive();
+    }
+
+    /**
+     * This method is to identify the charges which can override the savings
+     * rules(for example if there is a minimum enforced balance of 1000 on
+     * savings account with account balance of 1000, still these charges can be
+     * collected as these charges are initiated by system and it can bring down
+     * the balance below the enforced minimum balance).
+     * 
+     */
+    public boolean canOverriteSavingAccountRules() {
+        return !(this.isSavingsActivation() || this.isWithdrawalFee());
     }
 }

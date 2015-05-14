@@ -59,7 +59,7 @@ public class SavingsAccountChargeAssembler {
 
     public Set<SavingsAccountCharge> fromParsedJson(final JsonElement element, final String productCurrencyCode) {
 
-        final Set<SavingsAccountCharge> savingsAccountCharges = new HashSet<SavingsAccountCharge>();
+        final Set<SavingsAccountCharge> savingsAccountCharges = new HashSet<>();
 
         if (element.isJsonObject()) {
             final JsonObject topLevelJsonElement = element.getAsJsonObject();
@@ -82,8 +82,10 @@ public class SavingsAccountChargeAssembler {
                     final LocalDate dueDate = this.fromApiJsonHelper.extractLocalDateNamed(dueAsOfDateParamName, savingsChargeElement,
                             dateFormat, locale);
 
-                    final MonthDay feeOnMonthDay = this.fromApiJsonHelper.extractMonthDayNamed(feeOnMonthDayParamName, savingsChargeElement, monthDayFormat, locale);
-                    final Integer feeInterval = this.fromApiJsonHelper.extractIntegerNamed(feeIntervalParamName, savingsChargeElement, locale);
+                    final MonthDay feeOnMonthDay = this.fromApiJsonHelper.extractMonthDayNamed(feeOnMonthDayParamName,
+                            savingsChargeElement, monthDayFormat, locale);
+                    final Integer feeInterval = this.fromApiJsonHelper.extractIntegerNamed(feeIntervalParamName, savingsChargeElement,
+                            locale);
 
                     if (id == null) {
                         final Charge chargeDefinition = this.chargeRepository.findOneWithNotFoundDetection(chargeId);
@@ -98,12 +100,12 @@ public class SavingsAccountChargeAssembler {
                         if (chargeTimeType != null) {
                             chargeTime = ChargeTimeType.fromInt(chargeTimeType);
                         }
-                        
+
                         ChargeCalculationType chargeCalculation = null;
                         if (chargeCalculationType != null) {
                             chargeCalculation = ChargeCalculationType.fromInt(chargeCalculationType);
                         }
-                        
+
                         final boolean status = true;
                         final SavingsAccountCharge savingsAccountCharge = SavingsAccountCharge.createNewWithoutSavingsAccount(
                                 chargeDefinition, amount, chargeTime, chargeCalculation, dueDate, status, feeOnMonthDay, feeInterval);
@@ -125,19 +127,44 @@ public class SavingsAccountChargeAssembler {
         this.validateSavingsCharges(savingsAccountCharges, productCurrencyCode);
         return savingsAccountCharges;
     }
-    
+
+    public Set<SavingsAccountCharge> fromSavingsProduct(final SavingsProduct savingsProduct) {
+
+        final Set<SavingsAccountCharge> savingsAccountCharges = new HashSet<>();
+        Set<Charge> productCharges = savingsProduct.charges();
+        for (Charge charge : productCharges) {
+            ChargeTimeType chargeTime = null;
+            if (charge.getChargeTime() != null) {
+                chargeTime = ChargeTimeType.fromInt(charge.getChargeTime());
+            }
+            if (chargeTime != null && chargeTime.isOnSpecifiedDueDate()) {
+                continue;
+            }
+
+            ChargeCalculationType chargeCalculation = null;
+            if (charge.getChargeCalculation() != null) {
+                chargeCalculation = ChargeCalculationType.fromInt(charge.getChargeCalculation());
+            }
+            final boolean status = true;
+            final SavingsAccountCharge savingsAccountCharge = SavingsAccountCharge.createNewWithoutSavingsAccount(charge,
+                    charge.getAmount(), chargeTime, chargeCalculation, null, status, charge.getFeeOnMonthDay(), charge.feeInterval());
+            savingsAccountCharges.add(savingsAccountCharge);
+        }
+        return savingsAccountCharges;
+    }
+
     private void validateSavingsCharges(final Set<SavingsAccountCharge> charges, final String productCurrencyCode) {
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<ApiParameterError>();
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
                 .resource(SAVINGS_ACCOUNT_RESOURCE_NAME);
         boolean isOneWithdrawalPresent = false;
         boolean isOneAnnualPresent = false;
         for (SavingsAccountCharge charge : charges) {
-            if(!charge.hasCurrencyCodeOf(productCurrencyCode)){
+            if (!charge.hasCurrencyCodeOf(productCurrencyCode)) {
                 baseDataValidator.reset().parameter("currency").value(charge.getCharge().getId())
                         .failWithCodeNoParameterAddedToErrorCode("currency.and.charge.currency.not.same");
             }
-            
+
             if (charge.isWithdrawalFee()) {
                 if (isOneWithdrawalPresent) {
                     baseDataValidator.reset().failWithCodeNoParameterAddedToErrorCode("multiple.withdrawal.fee.per.account.not.supported");

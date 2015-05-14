@@ -17,6 +17,7 @@ import org.mifosplatform.portfolio.charge.domain.ChargeCalculationType;
 import org.mifosplatform.portfolio.charge.domain.ChargePaymentMode;
 import org.mifosplatform.portfolio.charge.domain.ChargeRepositoryWrapper;
 import org.mifosplatform.portfolio.charge.domain.ChargeTimeType;
+import org.mifosplatform.portfolio.charge.exception.LoanChargeCannotBeAddedException;
 import org.mifosplatform.portfolio.charge.exception.LoanChargeNotFoundException;
 import org.mifosplatform.portfolio.loanaccount.domain.LoanCharge;
 import org.mifosplatform.portfolio.loanaccount.domain.LoanChargeRepository;
@@ -44,7 +45,7 @@ public class LoanChargeAssembler {
 
     public Set<LoanCharge> fromParsedJson(final JsonElement element) {
 
-        final Set<LoanCharge> loanCharges = new HashSet<LoanCharge>();
+        final Set<LoanCharge> loanCharges = new HashSet<>();
 
         final BigDecimal principal = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed("principal", element);
         final Integer numberOfRepayments = this.fromApiJsonHelper.extractIntegerWithLocaleNamed("numberOfRepayments", element);
@@ -71,6 +72,14 @@ public class LoanChargeAssembler {
                             locale);
                     if (id == null) {
                         final Charge chargeDefinition = this.chargeRepository.findOneWithNotFoundDetection(chargeId);
+
+                        if (chargeDefinition.isOverdueInstallment()) {
+
+                            final String defaultUserMessage = "Installment charge cannot be added to the loan.";
+                            throw new LoanChargeCannotBeAddedException("loanCharge", "overdue.charge", defaultUserMessage, null,
+                                    chargeDefinition.getName());
+                        }
+
                         ChargeTimeType chargeTime = null;
                         if (chargeTimeType != null) {
                             chargeTime = ChargeTimeType.fromInt(chargeTimeType);
@@ -84,7 +93,7 @@ public class LoanChargeAssembler {
                             chargePaymentModeEnum = ChargePaymentMode.fromInt(chargePaymentMode);
                         }
                         final LoanCharge loanCharge = LoanCharge.createNewWithoutLoan(chargeDefinition, principal, amount, chargeTime,
-                                chargeCalculation, dueDate, chargePaymentModeEnum,numberOfRepayments);
+                                chargeCalculation, dueDate, chargePaymentModeEnum, numberOfRepayments);
                         loanCharges.add(loanCharge);
                     } else {
                         final Long loanChargeId = id;

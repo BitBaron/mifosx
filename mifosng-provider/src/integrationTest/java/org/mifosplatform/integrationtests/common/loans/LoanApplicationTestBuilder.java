@@ -1,6 +1,13 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ */
 package org.mifosplatform.integrationtests.common.loans;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import com.google.gson.Gson;
 
@@ -15,7 +22,8 @@ public class LoanApplicationTestBuilder {
     private static final String EQUAL_PRINCIPAL_PAYMENTS = "0";
     private static final String EQUAL_INSTALLMENTS = "1";
     private static final String CALCULATION_PERIOD_SAME_AS_REPAYMENT_PERIOD = "1";
-    private static final String MIFOS_STANDARD_STRATEGY = "1";
+    public static final String MIFOS_STANDARD_STRATEGY = "1";
+    public static final String RBI_INDIA_STRATEGY = "4";
 
     private String principal = "10,000";
     private String loanTermFrequency = "";
@@ -28,14 +36,22 @@ public class LoanApplicationTestBuilder {
     private String interestType = FLAT_BALANCE;
     private String amortizationType = EQUAL_PRINCIPAL_PAYMENTS;
     private String interestCalculationPeriodType = CALCULATION_PERIOD_SAME_AS_REPAYMENT_PERIOD;
-    private final String transactionProcessingID = MIFOS_STANDARD_STRATEGY;
+    private String transactionProcessingID = MIFOS_STANDARD_STRATEGY;
     private String expectedDisbursmentDate = "";
     private String submittedOnDate = "";
     private String loanType = "individual";
+    private String fixedEmiAmount = "10000";
+    private String maxOutstandingLoanBalance = "36000";
+    private String graceOnPrincipalPayment = null;
+    private String graceOnInterestPayment = null;
+    private List<HashMap> disbursementData = null;
+    private List<HashMap> charges = new ArrayList<HashMap>();
+    private String recalculationRestFrequencyDate = null;
+    private String repaymentsStartingFromDate = null;
 
-    public String build(final String ID, final String loanProductId) {
+    public String build(final String ID, final String loanProductId, final String savingsID) {
 
-        final HashMap<String, String> map = new HashMap<String, String>();
+        final HashMap<String, Object> map = new HashMap<>();
         map.put("dateFormat", "dd MMMM yyyy");
         map.put("locale", "en_GB");
         if (this.loanType == "group") {
@@ -58,6 +74,34 @@ public class LoanApplicationTestBuilder {
         map.put("expectedDisbursementDate", this.expectedDisbursmentDate);
         map.put("submittedOnDate", this.submittedOnDate);
         map.put("loanType", this.loanType);
+        if(repaymentsStartingFromDate != null){
+            map.put("repaymentsStartingFromDate", this.repaymentsStartingFromDate);
+        }
+        if (charges != null) {
+            map.put("charges", charges);
+        }
+        if (savingsID != null) {
+            map.put("linkAccountId", savingsID);
+        }
+
+        if (graceOnPrincipalPayment != null) {
+            map.put("graceOnPrincipalPayment", graceOnPrincipalPayment);
+        }
+
+        if (graceOnInterestPayment != null) {
+            map.put("graceOnInterestPayment", graceOnInterestPayment);
+        }
+
+        if (disbursementData != null) {
+            map.put("disbursementData", disbursementData);
+            map.put("fixedEmiAmount", fixedEmiAmount);
+            map.put("maxOutstandingLoanBalance", maxOutstandingLoanBalance);
+
+        }
+        if (recalculationRestFrequencyDate != null) {
+            map.put("recalculationRestFrequencyDate", recalculationRestFrequencyDate);
+        }
+        System.out.println("Loan Application request : " + map);
         return new Gson().toJson(map);
     }
 
@@ -116,6 +160,11 @@ public class LoanApplicationTestBuilder {
         return this;
     }
 
+    public LoanApplicationTestBuilder withRepaymentFrequencyTypeAsYear() {
+        this.repaymentFrequencyType = YEARS;
+        return this;
+    }
+
     public LoanApplicationTestBuilder withInterestRatePerPeriod(final String interestRate) {
         this.interestRate = interestRate;
         return this;
@@ -161,9 +210,43 @@ public class LoanApplicationTestBuilder {
         return this;
     }
 
+    public LoanApplicationTestBuilder withCharges(final List<HashMap> charges) {
+        this.charges = charges;
+        return this;
+    }
+
     public LoanApplicationTestBuilder withLoanType(final String loanType) {
         this.loanType = loanType;
         return this;
     }
 
+    public LoanApplicationTestBuilder withPrincipalGrace(final String graceOnPrincipalPayment) {
+        this.graceOnPrincipalPayment = graceOnPrincipalPayment;
+        return this;
+    }
+
+    public LoanApplicationTestBuilder withInterestGrace(final String graceOnInterestPayment) {
+        this.graceOnInterestPayment = graceOnInterestPayment;
+        return this;
+    }
+
+    public LoanApplicationTestBuilder withTranches(final List<HashMap> disbursementData) {
+        this.disbursementData = disbursementData;
+        return this;
+    }
+
+    public LoanApplicationTestBuilder withwithRepaymentStrategy(final String transactionProcessingStrategy) {
+        this.transactionProcessingID = transactionProcessingStrategy;
+        return this;
+    }
+
+    public LoanApplicationTestBuilder withRestFrequencyDate(final String recalculationRestFrequencyDate) {
+        this.recalculationRestFrequencyDate = recalculationRestFrequencyDate;
+        return this;
+    }
+    
+    public LoanApplicationTestBuilder withFirstRepaymentDate(final String firstRepaymentDate) {
+        this.repaymentsStartingFromDate = firstRepaymentDate;
+        return this;
+    }
 }
